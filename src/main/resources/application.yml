@@ -1,0 +1,105 @@
+spring:
+  web:
+    error:
+      include-message: always
+      include-binding-errors: always
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+  # File Upload Configuration
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
+
+  # Database Configuration
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://aws-1-ap-south-1.pooler.supabase.com:6543/postgres?ssl=true&sslmode=require&preferQueryMode=simple}
+    username: ${DB_USERNAME:postgres.rbyiitbryebpptdgttwh}
+    password: ${DB_PASSWORD:daYIjIgJ4NNAy4S1}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 3  # Reduced for Supabase pooler
+      minimum-idle: 1
+      idle-timeout: 60000  # 1 minute
+      max-lifetime: 300000  # 5 minutes
+      connection-test-query: SELECT 1
+      validation-timeout: 3000
+      leak-detection-threshold: 60000
+      auto-commit: true  # Changed to true for Supabase pooler
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # Auto-update schema without dropping data
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 10
+        order_inserts: true
+        order_updates: true
+        connection.provider_disables_autocommit: false  # CHANGED TO FALSE!
+        jdbc.lob.non_contextual_creation: true
+        generate_statistics: false
+        cache.use_second_level_cache: false
+        cache.use_query_cache: false
+        # Minimal valid values for Supabase compatibility
+        query.plan_cache_max_size: 64
+        query.plan_parameter_metadata_max_size: 64
+
+  # Mail Configuration
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:annoa16307@gmail.com}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+        transport:
+          protocol: smtp
+
+# Custom application Properties
+app:
+  jwt:
+    secret: ${JWT_SECRET:HGl4x4g8lsDeSEfpuQ9MSCHj+L7N1QHu/ElpT5Ed/Uk=}
+    expiration: 86400000
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173
+  payment:
+    khalti:
+      secret-key: ${KHALTI_SECRET_KEY:live_secret_key_68791341fdd94846a146f0457ff7b455}
+      api-url: https://dev.khalti.com/api/v2/epayment
+    esewa:
+      secret-key: ${ESEWA_SECRET_KEY:8gBm/:&EnhH.1/q}
+      product-code: ${ESEWA_PRODUCT_CODE:EPAYTEST}
+      form-url: https://rc-epay.esewa.com.np/api/epay/main/v2/form
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+
+# Server configuration
+server:
+  port: 8080
+
+# Logging configuration
+logging:
+  level:
+    org.springframework.transaction: DEBUG
+    org.springframework.jdbc: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.engine.transaction.internal.TransactionImpl: DEBUG
+    com.zaxxer.hikari: DEBUG
+    com.rabin.backend: DEBUG
