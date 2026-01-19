@@ -105,7 +105,8 @@ public class EventEnrollmentService {
         response.setTicketCode(enrollment.getTicketCode());
         response.setEventTitle(event.getTitle());
         response.setVenue(event.getVenue());
-        response.setEventDate(event.getEventDate());
+        response.setStartDate(event.getStartDate());
+        response.setEndDate(event.getEndDate());
         response.setTicketStatus(enrollment.getTicketStatus());
         response.setEnrolledAt(enrollment.getEnrolledAt());
 
@@ -188,7 +189,7 @@ public class EventEnrollmentService {
         EventEnrollmentResponseDto dto = modelMapper.map(enrollment, EventEnrollmentResponseDto.class);
         dto.setEventId(enrollment.getEvent().getId());
         dto.setEventTitle(enrollment.getEvent().getTitle());
-        dto.setEventDate(enrollment.getEvent().getEventDate());
+        dto.setStartDate(enrollment.getEvent().getStartDate());
         dto.setVenue(enrollment.getEvent().getVenue());
         dto.setUserId(enrollment.getUser().getId());
         dto.setUserFullName(enrollment.getUser().getFullName());

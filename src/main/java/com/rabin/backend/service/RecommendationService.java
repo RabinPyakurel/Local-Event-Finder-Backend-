@@ -31,10 +31,10 @@ public class RecommendationService {
     private final com.rabin.backend.repository.EventEnrollmentRepository eventEnrollmentRepository;
 
     // Weight constants for scoring algorithm
-    private static final double ALPHA = 0.7;  // Weight for content similarity
-    private static final double BETA = 0.3;   // Weight for location proximity
+    private static final double ALPHA = 0.3;  // Weight for content similarity
+    private static final double BETA = 0.5;   // Weight for location proximity
     private static final double SOCIAL_BOOST = 0.2;  // Boost for social connections
-    private static final double MAX_DISTANCE_KM = 100.0;  // Max distance for normalization
+    private static final double MAX_DISTANCE_KM = 10.0;  // Max distance for normalization
 
     public RecommendationService(EventRepository eventRepository,
                                   UserRepository userRepository,
@@ -123,7 +123,7 @@ public class RecommendationService {
                 .filter(ews -> ews.score > 0.0)  // Only include events with positive scores
                 .sorted((e1, e2) -> Double.compare(e2.score, e1.score))  // Sort descending by score
                 .limit(limit != null && limit > 0 ? limit : 10)
-                .collect(Collectors.toList());
+                .toList();
 
         log.info("Returning {} recommended events for user {}", scoredEvents.size(), userId);
 
@@ -239,7 +239,7 @@ public class RecommendationService {
         dto.setDescription(event.getDescription());
         dto.setVenue(event.getVenue());
         dto.setEventImageUrl(event.getEventImageUrl());
-        dto.setEventDate(event.getEventDate());
+        dto.setStartDate(event.getStartDate());
         dto.setLatitude(event.getLatitude());
         dto.setLongitude(event.getLongitude());
         dto.setOrganizerName(event.getCreatedBy().getFullName());

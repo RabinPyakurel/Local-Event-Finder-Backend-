@@ -14,7 +14,8 @@ public class CreateEventDto {
     private String description;
     private String venue;  // Event venue/location name
     private MultipartFile eventImage;  // Event image file upload
-    private LocalDateTime eventDate;
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
     private Double latitude;
     private Double longitude;
     private List<String> tags;  // List of InterestCategory enum names

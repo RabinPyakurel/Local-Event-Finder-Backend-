@@ -19,4 +19,5 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     // Ownership check (secure update/delete)
     Optional<Event> findByIdAndCreatedBy_Id(Long eventId, Long organizerId);
+    long countByEventStatus(EventStatus status);
 }

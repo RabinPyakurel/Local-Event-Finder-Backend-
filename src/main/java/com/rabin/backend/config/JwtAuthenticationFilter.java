@@ -2,6 +2,7 @@ package com.rabin.backend.config;
 
 import com.rabin.backend.model.User;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.security.CustomUserDetails;
 import com.rabin.backend.util.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -61,13 +62,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
+            CustomUserDetails userDetails = new CustomUserDetails(user);
+
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
-                            user,
+                            userDetails,
                             null,
-                            user.getRoles().stream()
-                                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
-                                    .collect(Collectors.toSet())
+                            userDetails.getAuthorities()
                     );
 
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

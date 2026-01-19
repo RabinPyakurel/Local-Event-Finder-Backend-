@@ -36,7 +36,8 @@ public class Event {
     @Column(length = 500)
     private String eventImageUrl;
 
-    private LocalDateTime eventDate;
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
 
     private Double latitude;
     private Double longitude;

@@ -11,7 +11,8 @@ public class EventEnrollmentResponseDto {
     private Long eventId;
     private String eventTitle;
     private LocalDateTime enrolledAt;
-    private LocalDateTime eventDate;
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
     private String venue;
     private Long userId;
     private String userFullName;

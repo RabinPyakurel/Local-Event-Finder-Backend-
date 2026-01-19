@@ -382,7 +382,8 @@ public class GroupService {
         dto.setTitle(event.getTitle());
         dto.setDescription(event.getDescription());
         dto.setVenue(event.getVenue());
-        dto.setEventDate(event.getEventDate());
+        dto.setStartDate(event.getStartDate());
+        dto.setEndDate(event.getEndDate());
         dto.setEventStatus(event.getEventStatus().toString());
         dto.setEventImageUrl(event.getEventImageUrl());
         dto.setLatitude(event.getLatitude());

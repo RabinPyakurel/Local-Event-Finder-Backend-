@@ -11,6 +11,7 @@ import com.rabin.backend.model.User;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -34,8 +35,9 @@ public class PaymentService {
     @Transactional
     public Object initiatePayment(PaymentInitiateDto dto) {
         // Get current user
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        User user = getUserFromEmail(email);
+        Long userId = SecurityUtil.getCurrentUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         // Get event
         Event event = eventRepository.findById(dto.getEventId())
@@ -143,10 +145,5 @@ public class PaymentService {
     public Payment getPaymentByTransactionId(String transactionId) {
         return paymentRepository.findByTransactionId(transactionId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
-    }
-
-    private User getUserFromEmail(String email) {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
     }
 }

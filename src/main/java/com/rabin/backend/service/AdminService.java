@@ -2,21 +2,40 @@ package com.rabin.backend.service;
 
 import com.rabin.backend.dto.GenericApiResponse;
 import com.rabin.backend.dto.response.AdminUserResponseDto;
+import com.rabin.backend.dto.response.EventEnrollmentResponseDto;
 import com.rabin.backend.dto.response.EventResponseDto;
+import com.rabin.backend.dto.response.GroupMembershipResponseDto;
+import com.rabin.backend.dto.response.GroupResponseDto;
+import com.rabin.backend.dto.response.PaymentResponseDto;
 import com.rabin.backend.dto.response.ReportResponseDto;
 import com.rabin.backend.enums.EventStatus;
+import com.rabin.backend.enums.MembershipStatus;
+import com.rabin.backend.enums.PaymentStatus;
 import com.rabin.backend.enums.ReportStatus;
+import com.rabin.backend.enums.RoleName;
 import com.rabin.backend.enums.UserStatus;
+import com.rabin.backend.exception.ResourceNotFoundException;
 import com.rabin.backend.exception.UserNotFoundException;
 import com.rabin.backend.model.Event;
+import com.rabin.backend.model.EventEnrollment;
 import com.rabin.backend.model.EventTagMap;
+import com.rabin.backend.model.Group;
+import com.rabin.backend.model.GroupMembership;
+import com.rabin.backend.model.Payment;
 import com.rabin.backend.model.Report;
+import com.rabin.backend.model.Role;
 import com.rabin.backend.model.User;
+import com.rabin.backend.repository.EventEnrollmentRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagMapRepository;
+import com.rabin.backend.repository.GroupMembershipRepository;
+import com.rabin.backend.repository.GroupRepository;
+import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.ReportRepository;
+import com.rabin.backend.repository.RoleRepository;
 import com.rabin.backend.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -24,7 +43,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -35,15 +56,27 @@ public class AdminService {
     private final EventRepository eventRepository;
     private final ReportRepository reportRepository;
     private final EventTagMapRepository eventTagMapRepository;
+    private final GroupRepository groupRepository;
+    private final GroupMembershipRepository groupMembershipRepository;
+    private final PaymentRepository paymentRepository;
+    private final EventEnrollmentRepository eventEnrollmentRepository;
+    private final RoleRepository roleRepository;
+    private final ModelMapper modelMapper;
 
     public AdminService(UserRepository userRepository,
                         EventRepository eventRepository,
                         ReportRepository reportRepository,
-                        EventTagMapRepository eventTagMapRepository) {
+                        EventTagMapRepository eventTagMapRepository, GroupRepository groupRepository, GroupMembershipRepository groupMembershipRepository, PaymentRepository paymentRepository, EventEnrollmentRepository eventEnrollmentRepository, RoleRepository roleRepository, ModelMapper modelMapper) {
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
         this.reportRepository = reportRepository;
         this.eventTagMapRepository = eventTagMapRepository;
+        this.groupRepository = groupRepository;
+        this.groupMembershipRepository = groupMembershipRepository;
+        this.paymentRepository = paymentRepository;
+        this.eventEnrollmentRepository = eventEnrollmentRepository;
+        this.roleRepository = roleRepository;
+        this.modelMapper = modelMapper;
     }
 
     // ==================== USER MANAGEMENT ====================
@@ -246,7 +279,8 @@ public class AdminService {
         dto.setDescription(event.getDescription());
         dto.setVenue(event.getVenue());
         dto.setEventImageUrl(event.getEventImageUrl());
-        dto.setEventDate(event.getEventDate());
+        dto.setStartDate(event.getStartDate());
+        dto.setEndDate(event.getEndDate());
         dto.setLatitude(event.getLatitude());
         dto.setLongitude(event.getLongitude());
         dto.setOrganizerName(event.getCreatedBy().getFullName());
@@ -275,4 +309,332 @@ public class AdminService {
 
         return dto;
     }
+
+    public GenericApiResponse<Map<String, Object>> getDashboardStats() {
+        log.debug("Admin: Getting dashboard statistics");
+
+        Map<String, Object> stats = new HashMap<>();
+
+        // User statistics
+        long totalUsers = userRepository.count();
+        long activeUsers = userRepository.countByUserStatus(UserStatus.ACTIVE);
+        long suspendedUsers = userRepository.countByUserStatus(UserStatus.SUSPENDED);
+
+        Map<String, Long> userStats = new HashMap<>();
+        userStats.put("total", totalUsers);
+        userStats.put("active", activeUsers);
+        userStats.put("suspended", suspendedUsers);
+        stats.put("users", userStats);
+
+        // Event statistics
+        long totalEvents = eventRepository.count();
+        long activeEvents = eventRepository.countByEventStatus(EventStatus.ACTIVE);
+        long inactiveEvents = eventRepository.countByEventStatus(EventStatus.INACTIVE);
+
+        Map<String, Long> eventStats = new HashMap<>();
+        eventStats.put("total", totalEvents);
+        eventStats.put("active", activeEvents);
+        eventStats.put("inactive", inactiveEvents);
+        stats.put("events", eventStats);
+
+        // Enrollment statistics
+        long totalEnrollments = eventEnrollmentRepository.count();
+        stats.put("totalEnrollments", totalEnrollments);
+
+        // Group statistics
+        long totalGroups = groupRepository.count();
+        long activeGroups = groupRepository.countByIsActive(true);
+        stats.put("totalGroups", totalGroups);
+        stats.put("activeGroups", activeGroups);
+
+        // Payment statistics
+        long totalPayments = paymentRepository.count();
+        long completedPayments = paymentRepository.countByPaymentStatus(PaymentStatus.COMPLETED);
+        long pendingPayments = paymentRepository.countByPaymentStatus(PaymentStatus.PENDING);
+
+        Map<String, Long> paymentStats = new HashMap<>();
+        paymentStats.put("total", totalPayments);
+        paymentStats.put("completed", completedPayments);
+        paymentStats.put("pending", pendingPayments);
+        stats.put("payments", paymentStats);
+
+        // Report statistics
+        long totalReports = reportRepository.count();
+        long pendingReports = reportRepository.countByReportStatus(ReportStatus.PENDING);
+
+        Map<String, Long> reportStats = new HashMap<>();
+        reportStats.put("total", totalReports);
+        reportStats.put("pending", pendingReports);
+        stats.put("reports", reportStats);
+
+        log.info("Admin: Dashboard stats retrieved successfully");
+        return GenericApiResponse.ok(200, "Dashboard statistics retrieved successfully", stats);
+    }
+
+    public GenericApiResponse<List<GroupResponseDto>> getAllGroups(Integer page, Integer size) {
+        log.debug("Admin: Getting all groups, page: {}, size: {}", page, size);
+
+        Pageable pageable = PageRequest.of(
+                page != null ? page : 0,
+                size != null ? size : 20,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<Group> groupsPage = groupRepository.findAll(pageable);
+        List<GroupResponseDto> groups = groupsPage.getContent().stream()
+                .map(this::mapToGroupResponse)
+                .collect(Collectors.toList());
+
+        log.info("Admin: Retrieved {} groups", groups.size());
+        return GenericApiResponse.ok(200, "Groups retrieved successfully", groups);
+    }
+
+    @Transactional
+    public GenericApiResponse<Void> deleteGroup(Long groupId) {
+        log.debug("Admin: Deleting group: {}", groupId);
+
+        if (!groupRepository.existsById(groupId)) {
+            return GenericApiResponse.error(404, "Group not found");
+        }
+
+        groupRepository.deleteById(groupId);
+
+        log.info("Admin: Group {} deleted successfully", groupId);
+        return GenericApiResponse.ok(200, "Group deleted successfully", null);
+    }
+
+    public GenericApiResponse<List<GroupMembershipResponseDto>> getGroupMemberships(Long groupId) {
+        log.debug("Admin: Getting memberships for group: {}", groupId);
+
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("Group", groupId));
+
+        List<GroupMembership> memberships = groupMembershipRepository.findByGroup(group);
+        List<GroupMembershipResponseDto> membershipDtos = memberships.stream()
+                .map(this::mapToGroupMembershipResponse)
+                .collect(Collectors.toList());
+
+        log.info("Admin: Retrieved {} memberships for group {}", membershipDtos.size(), groupId);
+        return GenericApiResponse.ok(200, "Group memberships retrieved successfully", membershipDtos);
+    }
+
+    @Transactional
+    public GenericApiResponse<GroupMembershipResponseDto> approveMembership(Long membershipId) {
+        log.debug("Admin: Approving membership: {}", membershipId);
+
+        GroupMembership membership = groupMembershipRepository.findById(membershipId)
+                .orElseThrow(() -> new ResourceNotFoundException("Membership", membershipId));
+
+        membership.setStatus(MembershipStatus.ACTIVE);
+        groupMembershipRepository.save(membership);
+
+        log.info("Admin: Membership {} approved successfully", membershipId);
+        return GenericApiResponse.ok(200, "Membership approved successfully",
+                mapToGroupMembershipResponse(membership));
+    }
+
+    @Transactional
+    public GenericApiResponse<Void> rejectMembership(Long membershipId) {
+        log.debug("Admin: Rejecting membership: {}", membershipId);
+
+        if (!groupMembershipRepository.existsById(membershipId)) {
+            return GenericApiResponse.error(404, "Membership not found");
+        }
+
+        groupMembershipRepository.deleteById(membershipId);
+
+        log.info("Admin: Membership {} rejected successfully", membershipId);
+        return GenericApiResponse.ok(200, "Membership rejected successfully", null);
+    }
+
+    @Transactional
+    public GenericApiResponse<GroupMembershipResponseDto> banMember(Long membershipId) {
+        log.debug("Admin: Banning member: {}", membershipId);
+
+        GroupMembership membership = groupMembershipRepository.findById(membershipId)
+                .orElseThrow(() -> new ResourceNotFoundException("Membership", membershipId));
+
+        membership.setStatus(MembershipStatus.BANNED);
+        groupMembershipRepository.save(membership);
+
+        log.info("Admin: Member {} banned successfully", membershipId);
+        return GenericApiResponse.ok(200, "Member banned successfully",
+                mapToGroupMembershipResponse(membership));
+    }
+
+    // ==================== PAYMENT MANAGEMENT ====================
+
+    public GenericApiResponse<List<PaymentResponseDto>> getAllPayments(Integer page, Integer size) {
+        log.debug("Admin: Getting all payments, page: {}, size: {}", page, size);
+
+        Pageable pageable = PageRequest.of(
+                page != null ? page : 0,
+                size != null ? size : 20,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<Payment> paymentsPage = paymentRepository.findAll(pageable);
+        List<PaymentResponseDto> payments = paymentsPage.getContent().stream()
+                .map(this::mapToPaymentResponse)
+                .collect(Collectors.toList());
+
+        log.info("Admin: Retrieved {} payments", payments.size());
+        return GenericApiResponse.ok(200, "Payments retrieved successfully", payments);
+    }
+
+    public GenericApiResponse<Map<String, Object>> getPaymentStats() {
+        log.debug("Admin: Getting payment statistics");
+
+        Map<String, Object> stats = new HashMap<>();
+
+        long totalPayments = paymentRepository.count();
+        long completedPayments = paymentRepository.countByPaymentStatus(PaymentStatus.COMPLETED);
+        long pendingPayments = paymentRepository.countByPaymentStatus(PaymentStatus.PENDING);
+        long failedPayments = paymentRepository.countByPaymentStatus(PaymentStatus.FAILED);
+
+        stats.put("total", totalPayments);
+        stats.put("completed", completedPayments);
+        stats.put("pending", pendingPayments);
+        stats.put("failed", failedPayments);
+
+        // Calculate total revenue from completed payments
+        List<Payment> allPayments = paymentRepository.findAll();
+        double totalRevenue = allPayments.stream()
+                .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
+                .mapToDouble(Payment::getAmount)
+                .sum();
+        stats.put("totalRevenue", totalRevenue);
+
+        log.info("Admin: Payment stats retrieved successfully");
+        return GenericApiResponse.ok(200, "Payment statistics retrieved successfully", stats);
+    }
+
+    // ==================== ENROLLMENT MANAGEMENT ====================
+
+    public GenericApiResponse<List<EventEnrollmentResponseDto>> getAllEnrollments(Integer page, Integer size) {
+        log.debug("Admin: Getting all enrollments, page: {}, size: {}", page, size);
+
+        Pageable pageable = PageRequest.of(
+                page != null ? page : 0,
+                size != null ? size : 20,
+                Sort.by(Sort.Direction.DESC, "enrolledAt")
+        );
+
+        Page<EventEnrollment> enrollmentsPage = eventEnrollmentRepository.findAll(pageable);
+        List<EventEnrollmentResponseDto> enrollments = enrollmentsPage.getContent().stream()
+                .map(this::mapToEnrollmentResponse)
+                .collect(Collectors.toList());
+
+        log.info("Admin: Retrieved {} enrollments", enrollments.size());
+        return GenericApiResponse.ok(200, "Enrollments retrieved successfully", enrollments);
+    }
+
+    // ==================== ROLE MANAGEMENT ====================
+
+    @Transactional
+    public GenericApiResponse<AdminUserResponseDto> assignRole(Long userId, String roleName) {
+        log.debug("Admin: Assigning role {} to user {}", roleName, userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        try {
+            RoleName roleNameEnum = RoleName.valueOf(roleName.toUpperCase());
+            Role role = roleRepository.findByName(roleNameEnum)
+                    .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleName));
+
+            if (user.getRoles().contains(role)) {
+                return GenericApiResponse.error(400, "User already has this role");
+            }
+
+            user.getRoles().add(role);
+            userRepository.save(user);
+
+            log.info("Admin: Role {} assigned to user {} successfully", roleName, userId);
+            return GenericApiResponse.ok(200, "Role assigned successfully",
+                    mapToAdminUserResponse(user));
+        } catch (IllegalArgumentException e) {
+            return GenericApiResponse.error(400, "Invalid role name: " + roleName);
+        }
+    }
+
+    @Transactional
+    public GenericApiResponse<AdminUserResponseDto> removeRole(Long userId, String roleName) {
+        log.debug("Admin: Removing role {} from user {}", roleName, userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        try {
+            RoleName roleNameEnum = RoleName.valueOf(roleName.toUpperCase());
+            Role role = roleRepository.findByName(roleNameEnum)
+                    .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleName));
+
+            if (!user.getRoles().contains(role)) {
+                return GenericApiResponse.error(400, "User does not have this role");
+            }
+
+            user.getRoles().remove(role);
+            userRepository.save(user);
+
+            log.info("Admin: Role {} removed from user {} successfully", roleName, userId);
+            return GenericApiResponse.ok(200, "Role removed successfully",
+                    mapToAdminUserResponse(user));
+        } catch (IllegalArgumentException e) {
+            return GenericApiResponse.error(400, "Invalid role name: " + roleName);
+        }
+    }
+
+    private GroupResponseDto mapToGroupResponse(Group group) {
+        GroupResponseDto dto = new GroupResponseDto();
+        dto.setId(group.getId());
+        dto.setName(group.getName());
+        dto.setDescription(group.getDescription());
+        dto.setGroupImageUrl(group.getGroupImageUrl());
+        dto.setCreatorId(group.getCreatedBy().getId());
+        dto.setCreatorName(group.getCreatedBy().getFullName());
+        dto.setRequiresApproval(group.getRequiresApproval());
+        dto.setIsActive(group.getIsActive());
+        dto.setCreatedAt(group.getCreatedAt());
+        dto.setUpdatedAt(group.getUpdatedAt());
+        return dto;
+    }
+
+    private GroupMembershipResponseDto mapToGroupMembershipResponse(GroupMembership membership) {
+        GroupMembershipResponseDto dto = new GroupMembershipResponseDto();
+        dto.setId(membership.getId());
+        dto.setUserId(membership.getUser().getId());
+        dto.setUserFullName(membership.getUser().getFullName());
+        dto.setUserEmail(membership.getUser().getEmail());
+        dto.setUserProfileImageUrl(membership.getUser().getProfileImageUrl());
+        dto.setGroupId(membership.getGroup().getId());
+        dto.setGroupName(membership.getGroup().getName());
+        dto.setStatus(membership.getStatus());
+        dto.setIsAdmin(membership.getIsAdmin());
+        dto.setJoinedAt(membership.getJoinedAt());
+        return dto;
+    }
+
+    private PaymentResponseDto mapToPaymentResponse(Payment payment) {
+        PaymentResponseDto dto = modelMapper.map(payment, PaymentResponseDto.class);
+        dto.setUserId(payment.getUser().getId());
+        dto.setUserName(payment.getUser().getFullName());
+        dto.setEventId(payment.getEvent().getId());
+        dto.setEventTitle(payment.getEvent().getTitle());
+        return dto;
+    }
+
+    private EventEnrollmentResponseDto mapToEnrollmentResponse(EventEnrollment enrollment) {
+        EventEnrollmentResponseDto dto = modelMapper.map(enrollment, EventEnrollmentResponseDto.class);
+        dto.setEventId(enrollment.getEvent().getId());
+        dto.setEventTitle(enrollment.getEvent().getTitle());
+        dto.setStartDate(enrollment.getEvent().getStartDate());
+        dto.setEndDate(enrollment.getEvent().getEndDate());
+        dto.setVenue(enrollment.getEvent().getVenue());
+        dto.setUserId(enrollment.getUser().getId());
+        dto.setUserFullName(enrollment.getUser().getFullName());
+        dto.setUserEmail(enrollment.getUser().getEmail());
+        return dto;
+    }
+
 }

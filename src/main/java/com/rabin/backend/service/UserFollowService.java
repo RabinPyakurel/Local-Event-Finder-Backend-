@@ -1,6 +1,7 @@
 package com.rabin.backend.service;
 
 import com.rabin.backend.dto.response.UserFollowResponseDto;
+import com.rabin.backend.enums.RoleName;
 import com.rabin.backend.model.User;
 import com.rabin.backend.model.UserFollow;
 import com.rabin.backend.repository.UserFollowRepository;
@@ -38,6 +39,20 @@ public class UserFollowService {
 
         User userToFollow = userRepository.findById(userToFollowId)
                 .orElseThrow(() -> new RuntimeException("User to follow not found"));
+
+        // Prevent admins from following or being followed
+        boolean followerIsAdmin = follower.getRoles().stream()
+                .anyMatch(role -> role.getName() == RoleName.ADMIN);
+        boolean toFollowIsAdmin = userToFollow.getRoles().stream()
+                .anyMatch(role -> role.getName() == RoleName.ADMIN);
+
+        if (followerIsAdmin) {
+            throw new IllegalStateException("Administrators cannot follow users");
+        }
+
+        if (toFollowIsAdmin) {
+            throw new IllegalStateException("Cannot follow administrators");
+        }
 
         if (userFollowRepository.existsByFollowerAndFollowing(follower, userToFollow)) {
             throw new IllegalStateException("Already following this user");

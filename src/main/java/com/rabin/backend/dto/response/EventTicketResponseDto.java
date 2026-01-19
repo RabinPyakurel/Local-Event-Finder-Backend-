@@ -13,7 +13,8 @@ public class EventTicketResponseDto {
     private String ticketCode;
     private String eventTitle;
     private String venue;
-    private LocalDateTime eventDate;
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
     private TicketStatus ticketStatus;
     private LocalDateTime enrolledAt;
 

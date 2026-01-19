@@ -22,4 +22,6 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
 
     // Search groups by name
     List<Group> findByNameContainingIgnoreCaseAndIsActiveTrue(String name);
+    // Count methods for admin dashboard
+    long countByIsActive(Boolean isActive);
 }

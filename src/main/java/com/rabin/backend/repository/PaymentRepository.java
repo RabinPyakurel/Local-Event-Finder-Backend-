@@ -12,4 +12,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByUser(User user);
     List<Payment> findByUserAndPaymentStatus(User user, PaymentStatus status);
     Optional<Payment> findByTransactionId(String transactionId);
+
+    // Count methods for admin dashboard
+    long countByPaymentStatus(PaymentStatus status);
 }
