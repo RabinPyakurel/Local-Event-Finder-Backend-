@@ -5,6 +5,8 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.nio.file.Paths;
+
 /**
  * Web MVC configuration for serving static files and CORS
  */
@@ -17,14 +19,10 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // Serve files from uploads directory
+        String uploadsPath = Paths.get("uploads").toAbsolutePath().toUri().toString();
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:uploads/")
+                .addResourceLocations(uploadsPath)
                 .setCachePeriod(3600); // Cache for 1 hour
-
-        // Alternative absolute path (if relative doesn't work)
-        registry.addResourceHandler("/static/uploads/**")
-                .addResourceLocations("file:./uploads/")
-                .setCachePeriod(3600);
     }
 
     /**
