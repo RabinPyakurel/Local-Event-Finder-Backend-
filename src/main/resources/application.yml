@@ -3,17 +3,19 @@ spring:
     error:
       include-message: always
       include-binding-errors: always
+
   jackson:
     deserialization:
       fail-on-unknown-properties: true
 
-  # File Upload Configuration
+  # File Upload Configuration for webmvc
   servlet:
     multipart:
       enabled: true
-      max-file-size: 5MB
-      max-request-size: 10MB
-      file-size-threshold: 2KB
+      max-file-size: 50MB
+      max-request-size: 200MB
+      file-size-threshold: 0B
+      resolve-lazily: false
 
   # Database Configuration
   datasource:
@@ -23,18 +25,18 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       connection-timeout: 30000
-      maximum-pool-size: 3  # Reduced for Supabase pooler
+      maximum-pool-size: 3
       minimum-idle: 1
-      idle-timeout: 60000  # 1 minute
-      max-lifetime: 300000  # 5 minutes
+      idle-timeout: 60000
+      max-lifetime: 300000
       connection-test-query: SELECT 1
       validation-timeout: 3000
       leak-detection-threshold: 60000
-      auto-commit: true  # Changed to true for Supabase pooler
+      auto-commit: true
 
   jpa:
     hibernate:
-      ddl-auto: create-drop  # Auto-update schema without dropping data
+      ddl-auto: create-drop
     show-sql: true
     properties:
       hibernate:
@@ -44,21 +46,19 @@ spring:
           batch_size: 10
         order_inserts: true
         order_updates: true
-        connection.provider_disables_autocommit: false  # CHANGED TO FALSE!
+        connection.provider_disables_autocommit: false
         jdbc.lob.non_contextual_creation: true
         generate_statistics: false
         cache.use_second_level_cache: false
         cache.use_query_cache: false
-        # Minimal valid values for Supabase compatibility
         query.plan_cache_max_size: 64
         query.plan_parameter_metadata_max_size: 64
 
-  # Mail Configuration
   mail:
     host: smtp.gmail.com
     port: 587
     username: ${MAIL_USERNAME:annoa16307@gmail.com}
-    password: ${MAIL_PASSWORD}
+    password: ${MAIL_PASSWORD:pekzktlmsgzsibtp}
     properties:
       mail:
         smtp:
@@ -72,7 +72,6 @@ spring:
         transport:
           protocol: smtp
 
-# Custom application Properties
 app:
   jwt:
     secret: ${JWT_SECRET:HGl4x4g8lsDeSEfpuQ9MSCHj+L7N1QHu/ElpT5Ed/Uk=}
@@ -92,6 +91,13 @@ app:
 # Server configuration
 server:
   port: 8080
+  tomcat:
+    max-http-form-post-size: 200MB
+    max-swallow-size: 200MB
+    max-parameter-count: 10000
+    # For Tomcat 11 (used in Spring Boot 4.x)
+    max-part-count: 20
+
 
 # Logging configuration
 logging:
@@ -103,3 +109,7 @@ logging:
     org.hibernate.engine.transaction.internal.TransactionImpl: DEBUG
     com.zaxxer.hikari: DEBUG
     com.rabin.backend: DEBUG
+    # Enable Tomcat multipart debugging
+    org.apache.tomcat.util.http.fileupload: DEBUG
+    org.apache.catalina.connector: DEBUG
+    org.apache.catalina.core: DEBUG

@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -140,6 +141,24 @@ public class GlobalExceptionHandler {
         log.warn("❌ File upload size exceeded");
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(GenericApiResponse.error(413, "File size exceeds maximum limit of 5MB"));
+    }
+
+    /**
+     * Handle multipart exceptions (including FileCountLimitExceededException)
+     */
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<GenericApiResponse<Void>> handleMultipartException(MultipartException ex) {
+        log.error("❌ Multipart request error: {}", ex.getMessage(), ex);
+
+        String message = "Failed to process multipart request";
+        if (ex.getMessage() != null && ex.getMessage().contains("FileCountLimitExceededException")) {
+            message = "Too many form fields or files in request. Please reduce the number of fields and try again.";
+        } else if (ex.getMessage() != null && ex.getMessage().contains("FileSizeLimitExceededException")) {
+            message = "One or more files exceed the maximum allowed size of 5MB";
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(GenericApiResponse.error(400, message));
     }
 
     /**

@@ -35,7 +35,7 @@ public class EventController {
     }
 
     // ORGANIZER ONLY - Create Event
-    @PostMapping(consumes = {"multipart/form-data"})
+    @PostMapping("/create")
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<GenericApiResponse<EventResponseDto>> createEvent(
             @ModelAttribute CreateEventDto dto
@@ -50,7 +50,7 @@ public class EventController {
     }
 
     // ORGANIZER ONLY - Update Event
-    @PutMapping(value = "/{eventId:\\d+}", consumes = {"multipart/form-data"})
+    @PutMapping(value = "/update/{eventId:\\d+}")
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<GenericApiResponse<EventResponseDto>> updateEvent(
             @PathVariable Long eventId,
@@ -66,7 +66,7 @@ public class EventController {
     }
 
     // ORGANIZER ONLY - Cancel Event
-    @DeleteMapping("/{eventId:\\d+}")
+    @DeleteMapping("/delete/{eventId:\\d+}")
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<GenericApiResponse<Void>> cancelEvent(@PathVariable Long eventId) {
         Long organizerId = SecurityUtil.getCurrentUserId();

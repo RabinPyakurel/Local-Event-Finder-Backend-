@@ -250,6 +250,7 @@ public class AuthService {
         response.setMessage(message);
         response.setEmail(user.getEmail());
         response.setFullName(user.getFullName());
+        response.setRole(user.getRoles().toString());
         return response;
     }
 }

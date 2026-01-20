@@ -160,6 +160,7 @@ public class UserService {
         profile.setFullName(user.getFullName());
         profile.setEmail(user.getEmail());
         profile.setDob(user.getDob());
+        profile.setJoinDate(user.getCreatedAt());
         profile.setProfileImageUrl(user.getProfileImageUrl());
 
         // Get user interests

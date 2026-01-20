@@ -1,5 +1,6 @@
 package com.rabin.backend.dto.request;
 
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.web.multipart.MultipartFile;
@@ -7,8 +8,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter
-@Setter
+@Data
 public class CreateEventDto {
     private String title;
     private String description;

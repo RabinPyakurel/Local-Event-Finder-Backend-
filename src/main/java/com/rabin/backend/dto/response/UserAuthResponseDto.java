@@ -8,4 +8,5 @@ public class UserAuthResponseDto {
     private String message;
     private String fullName;
     private String email;
+    private String role;
 }
