@@ -19,6 +19,8 @@ public class EventResponseDto {
     private Double latitude;
     private Double longitude;
     private String organizerName;
+    private String organizerProfileImage;
+    private Long organizerId;
     private String eventStatus;
     private List<String> tags;
     private Double finalScore;  // For recommendations

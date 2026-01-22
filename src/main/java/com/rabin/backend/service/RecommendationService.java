@@ -34,7 +34,7 @@ public class RecommendationService {
     private static final double ALPHA = 0.3;  // Weight for content similarity
     private static final double BETA = 0.5;   // Weight for location proximity
     private static final double SOCIAL_BOOST = 0.2;  // Boost for social connections
-    private static final double MAX_DISTANCE_KM = 10.0;  // Max distance for normalization
+    private static final double MAX_DISTANCE_KM = 100.0;  // Max distance for normalization
 
     public RecommendationService(EventRepository eventRepository,
                                   UserRepository userRepository,

@@ -18,6 +18,9 @@ public interface EventEnrollmentRepository extends JpaRepository<EventEnrollment
     // Organizer views enrollments
     List<EventEnrollment> findByEvent_Id(Long eventId);
 
+    // Count enrollments for an event
+    long countByEvent_Id(Long eventId);
+
     // User views own enrollments
     List<EventEnrollment> findByUser_Id(Long userId);
 

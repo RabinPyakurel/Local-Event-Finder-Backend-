@@ -509,6 +509,76 @@ public class AdminService {
         return GenericApiResponse.ok(200, "Payment statistics retrieved successfully", stats);
     }
 
+    // ==================== REFUND MANAGEMENT ====================
+
+    public GenericApiResponse<List<PaymentResponseDto>> getPendingRefunds() {
+        log.debug("Admin: Getting pending refunds");
+
+        // Find payments with REFUNDED status but not yet processed
+        List<Payment> pendingRefunds = paymentRepository.findByPaymentStatusAndRefundProcessed(
+                PaymentStatus.REFUNDED, false);
+
+        List<PaymentResponseDto> refunds = pendingRefunds.stream()
+                .map(this::mapToPaymentResponse)
+                .collect(Collectors.toList());
+
+        log.info("Admin: Retrieved {} pending refunds", refunds.size());
+        return GenericApiResponse.ok(200, "Pending refunds retrieved successfully", refunds);
+    }
+
+    @Transactional
+    public GenericApiResponse<PaymentResponseDto> processRefund(Long paymentId, String note) {
+        log.debug("Admin: Processing refund for payment: {}", paymentId);
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment", paymentId));
+
+        if (payment.getPaymentStatus() != PaymentStatus.REFUNDED) {
+            return GenericApiResponse.error(400, "Payment is not marked for refund");
+        }
+
+        if (Boolean.TRUE.equals(payment.getRefundProcessed())) {
+            return GenericApiResponse.error(400, "Refund has already been processed");
+        }
+
+        // Mark refund as processed
+        payment.setRefundProcessed(true);
+        payment.setRefundedAt(java.time.LocalDateTime.now());
+        if (note != null && !note.trim().isEmpty()) {
+            payment.setRefundNote(note);
+        }
+
+        paymentRepository.save(payment);
+
+        log.info("Admin: Refund processed for payment: {}, amount: {}", paymentId, payment.getAmount());
+        return GenericApiResponse.ok(200, "Refund processed successfully", mapToPaymentResponse(payment));
+    }
+
+    public GenericApiResponse<Map<String, Object>> getRefundStats() {
+        log.debug("Admin: Getting refund statistics");
+
+        Map<String, Object> stats = new HashMap<>();
+
+        // Count total refunds
+        long totalRefunds = paymentRepository.countByPaymentStatus(PaymentStatus.REFUNDED);
+        long pendingRefunds = paymentRepository.countByPaymentStatusAndRefundProcessed(PaymentStatus.REFUNDED, false);
+        long processedRefunds = paymentRepository.countByPaymentStatusAndRefundProcessed(PaymentStatus.REFUNDED, true);
+
+        stats.put("total", totalRefunds);
+        stats.put("pending", pendingRefunds);
+        stats.put("processed", processedRefunds);
+
+        // Calculate total refund amount
+        List<Payment> allRefunds = paymentRepository.findByPaymentStatusAndRefundProcessed(PaymentStatus.REFUNDED, false);
+        double pendingRefundAmount = allRefunds.stream()
+                .mapToDouble(Payment::getAmount)
+                .sum();
+        stats.put("pendingAmount", pendingRefundAmount);
+
+        log.info("Admin: Refund stats retrieved successfully");
+        return GenericApiResponse.ok(200, "Refund statistics retrieved successfully", stats);
+    }
+
     // ==================== ENROLLMENT MANAGEMENT ====================
 
     public GenericApiResponse<List<EventEnrollmentResponseDto>> getAllEnrollments(Integer page, Integer size) {
@@ -619,8 +689,12 @@ public class AdminService {
         PaymentResponseDto dto = modelMapper.map(payment, PaymentResponseDto.class);
         dto.setUserId(payment.getUser().getId());
         dto.setUserName(payment.getUser().getFullName());
+        dto.setUserEmail(payment.getUser().getEmail());
         dto.setEventId(payment.getEvent().getId());
         dto.setEventTitle(payment.getEvent().getTitle());
+        dto.setRefundProcessed(payment.getRefundProcessed());
+        dto.setRefundedAt(payment.getRefundedAt());
+        dto.setRefundNote(payment.getRefundNote());
         return dto;
     }
 

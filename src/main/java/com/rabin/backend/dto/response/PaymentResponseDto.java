@@ -11,6 +11,7 @@ public class PaymentResponseDto {
     private Long id;
     private Long userId;
     private String userName;
+    private String userEmail;
     private Long eventId;
     private String eventTitle;
     private Double amount;
@@ -19,4 +20,9 @@ public class PaymentResponseDto {
     private String transactionId;
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
+
+    // Refund tracking
+    private Boolean refundProcessed;
+    private LocalDateTime refundedAt;
+    private String refundNote;
 }

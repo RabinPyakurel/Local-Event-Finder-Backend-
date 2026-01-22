@@ -29,6 +29,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -250,7 +252,10 @@ public class AuthService {
         response.setMessage(message);
         response.setEmail(user.getEmail());
         response.setFullName(user.getFullName());
-        response.setRole(user.getRoles().toString());
+        List<String> roles = user.getRoles().stream()
+                .map(role -> role.getName().name())
+                .collect(Collectors.toList());
+        response.setRoles(roles);
         return response;
     }
 }

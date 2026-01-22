@@ -50,6 +50,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/uploads/**"
                         ).permitAll()
+                        // Payment verification callbacks (called by Khalti/eSewa, not frontend)
+                        .requestMatchers(HttpMethod.GET, "/api/payments/khalti/verify", "/api/payments/esewa/verify").permitAll()
                         // Public GET endpoints for events
                         .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/*", "/api/events/explore", "/api/events/search").permitAll()
                         // All other requests require authentication

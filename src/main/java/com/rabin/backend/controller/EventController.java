@@ -160,4 +160,14 @@ public class EventController {
                 GenericApiResponse.ok(200, "Events fetched successfully", events)
         );
     }
+
+    @GetMapping("/{eventId}/check-ownership")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<GenericApiResponse<Boolean>> checkOwnership(@PathVariable Long eventId){
+        Long usrId = SecurityUtil.getCurrentUserId();
+
+        boolean isMyEvent = eventService.isEventOrganizer(eventId,usrId);
+
+        return ResponseEntity.ok(GenericApiResponse.ok(200,"Ownership check successful",isMyEvent));
+    }
 }

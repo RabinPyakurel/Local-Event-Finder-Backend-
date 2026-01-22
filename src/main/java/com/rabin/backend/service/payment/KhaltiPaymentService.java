@@ -27,7 +27,7 @@ public class KhaltiPaymentService {
     @Value("${app.payment.khalti.secret-key}")
     private String secretKey;
 
-    @Value("${app.payment.khalti.api-url}")
+    @Value("${app.payment.khalti.api-url:https://dev.khalti.com/api/v2/epayment}")
     private String apiUrl;
 
     @Value("${app.base-url:http://localhost:8080}")
@@ -48,14 +48,21 @@ public class KhaltiPaymentService {
             Map<String, Object> payload = new HashMap<>();
             payload.put("return_url", baseUrl + "/api/payments/khalti/verify");
             payload.put("website_url", baseUrl);
-            payload.put("amount", (int) (payment.getAmount() * 100)); // Convert to paisa (smallest unit)
+            payload.put("amount", String.valueOf((int) (payment.getAmount() * 100))); // Convert to paisa as string
             payload.put("purchase_order_id", purchaseOrderId);
             payload.put("purchase_order_name", event.getTitle());
+
+            // Add customer info
+            Map<String, String> customerInfo = new HashMap<>();
+            customerInfo.put("name", payment.getUser().getFullName());
+            customerInfo.put("email", payment.getUser().getEmail());
+            customerInfo.put("phone", "9800000000");
+            payload.put("customer_info", customerInfo);
 
             // Set headers
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Authorization", "Key " + secretKey);
+            headers.set("Authorization", "key " + secretKey);
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
 
@@ -75,7 +82,7 @@ public class KhaltiPaymentService {
                 responseDto.setPayment_url(responseJson.get("payment_url").asText());
 
                 if (responseJson.has("expires_at")) {
-                    responseDto.setExpires_at(responseJson.get("expires_at").asLong());
+                    responseDto.setExpires_at(responseJson.get("expires_at").asText());
                 }
                 if (responseJson.has("expires_in")) {
                     responseDto.setExpires_in(responseJson.get("expires_in").asInt());
@@ -105,7 +112,7 @@ public class KhaltiPaymentService {
             // Set headers
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Authorization", "Key " + secretKey);
+            headers.set("Authorization", "key " + secretKey);
 
             HttpEntity<Map<String, String>> request = new HttpEntity<>(payload, headers);
 

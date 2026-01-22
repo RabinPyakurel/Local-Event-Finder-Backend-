@@ -8,14 +8,22 @@ import com.rabin.backend.model.Event;
 import com.rabin.backend.model.EventTag;
 import com.rabin.backend.model.EventTagMap;
 import com.rabin.backend.model.User;
+import com.rabin.backend.enums.PaymentStatus;
+import com.rabin.backend.enums.TicketStatus;
+import com.rabin.backend.model.EventEnrollment;
+import com.rabin.backend.model.Payment;
+import com.rabin.backend.repository.EventEnrollmentRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagMapRepository;
 import com.rabin.backend.repository.EventTagRepository;
+import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.util.EmailUtil;
 import com.rabin.backend.util.FileUtil;
 import com.rabin.backend.util.Haversine;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -30,15 +38,24 @@ public class EventService {
     private final UserRepository userRepository;
     private final EventTagRepository eventTagRepository;
     private final EventTagMapRepository eventTagMapRepository;
+    private final EventEnrollmentRepository enrollmentRepository;
+    private final PaymentRepository paymentRepository;
+    private final EmailUtil emailUtil;
 
     public EventService(EventRepository eventRepository,
                         UserRepository userRepository,
                         EventTagRepository eventTagRepository,
-                        EventTagMapRepository eventTagMapRepository) {
+                        EventTagMapRepository eventTagMapRepository,
+                        EventEnrollmentRepository enrollmentRepository,
+                        PaymentRepository paymentRepository,
+                        EmailUtil emailUtil) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.eventTagRepository = eventTagRepository;
         this.eventTagMapRepository = eventTagMapRepository;
+        this.enrollmentRepository = enrollmentRepository;
+        this.paymentRepository = paymentRepository;
+        this.emailUtil = emailUtil;
     }
 
     @Transactional
@@ -134,7 +151,18 @@ public class EventService {
         }
 
         // Update paid event fields
-        if (dto.getIsPaid() != null) event.setIsPaid(dto.getIsPaid());
+        if (dto.getIsPaid() != null) {
+            // Prevent changing from FREE to PAID if users are already enrolled
+            if (dto.getIsPaid() && !event.getIsPaid()) {
+                long enrolledCount = enrollmentRepository.countByEvent_Id(eventId);
+                if (enrolledCount > 0) {
+                    throw new IllegalArgumentException(
+                            "Cannot change event to paid. " + enrolledCount + " users are already enrolled. " +
+                            "Please create a new paid event instead.");
+                }
+            }
+            event.setIsPaid(dto.getIsPaid());
+        }
         if (dto.getPrice() != null) event.setPrice(dto.getPrice());
         if (dto.getAvailableSeats() != null) event.setAvailableSeats(dto.getAvailableSeats());
 
@@ -171,9 +199,47 @@ public class EventService {
             throw new IllegalArgumentException("You are not authorized to cancel this event");
         }
 
-        event.setEventStatus(EventStatus.INACTIVE);
+        // Get all enrollments for this event
+        List<EventEnrollment> enrollments = enrollmentRepository.findByEvent_Id(eventId);
+        log.info("Cancelling event {} with {} enrollments", eventId, enrollments.size());
+
+        // Cancel all enrollments and process refunds/notifications
+        for (EventEnrollment enrollment : enrollments) {
+            // Cancel the ticket
+            enrollment.setTicketStatus(TicketStatus.CANCELLED);
+            enrollmentRepository.save(enrollment);
+
+            // For paid events, mark payment as REFUNDED
+            Double refundAmount = null;
+            if (event.getIsPaid()) {
+                Payment payment = paymentRepository.findByEnrollment(enrollment).orElse(null);
+                if (payment != null && payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
+                    payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                    paymentRepository.save(payment);
+                    refundAmount = payment.getAmount();
+                    log.info("Payment {} marked for refund, amount: {}", payment.getId(), refundAmount);
+                }
+            }
+
+            // Send cancellation email notification
+            try {
+                emailUtil.sendEventCancellationEmail(
+                        enrollment.getUser().getEmail(),
+                        enrollment.getUser().getFullName(),
+                        event.getTitle(),
+                        event.getIsPaid(),
+                        refundAmount
+                );
+            } catch (Exception e) {
+                log.error("Failed to send cancellation email to user {}: {}",
+                        enrollment.getUser().getId(), e.getMessage());
+            }
+        }
+
+        // Update event status
+        event.setEventStatus(EventStatus.CANCELLED);
         eventRepository.save(event);
-        log.info("Event cancelled: {}", eventId);
+        log.info("Event cancelled: {}, {} users notified", eventId, enrollments.size());
     }
 
     // Get all active events (PUBLIC)
@@ -340,6 +406,9 @@ public class EventService {
             }
         }
     }
+    public boolean isEventOrganizer(Long eventId, Long userId) {
+        return eventRepository.existsByIdAndCreatedBy_Id(eventId,userId);
+    }
 
     private EventResponseDto mapToResponse(Event event) {
         EventResponseDto dto = new EventResponseDto();
@@ -365,7 +434,8 @@ public class EventService {
         dto.setPrice(event.getPrice());
         dto.setAvailableSeats(event.getAvailableSeats());
         dto.setBookedSeats(event.getBookedSeats());
-
+        dto.setOrganizerId(event.getCreatedBy().getId());
+        dto.setOrganizerProfileImage(event.getCreatedBy().getProfileImageUrl());
         return dto;
     }
 }

@@ -30,4 +30,37 @@ public class EmailUtil {
             log.error("Failed to send email to {}: {}", toEmail, e.getMessage());
         }
     }
+
+    /**
+     * Send event cancellation notification to enrolled user
+     */
+    public void sendEventCancellationEmail(String toEmail, String fullName, String eventTitle,
+                                            boolean isPaidEvent, Double refundAmount) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(toEmail);
+            message.setSubject("Event Cancelled: " + eventTitle);
+
+            String refundInfo = "";
+            if (isPaidEvent && refundAmount != null && refundAmount > 0) {
+                refundInfo = String.format(
+                        "\n\nSince this was a paid event, your payment of Rs. %.2f will be refunded within 5-7 business days.",
+                        refundAmount
+                );
+            }
+
+            message.setText(String.format(
+                    "Hello %s,\n\n" +
+                    "We regret to inform you that the event \"%s\" has been cancelled by the organizer.\n" +
+                    "Your ticket has been automatically cancelled.%s\n\n" +
+                    "We apologize for any inconvenience caused.\n\n" +
+                    "Best regards,\nEvent Finder Team",
+                    fullName, eventTitle, refundInfo
+            ));
+            mailSender.send(message);
+            log.debug("Sent event cancellation email to {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send cancellation email to {}: {}", toEmail, e.getMessage());
+        }
+    }
 }

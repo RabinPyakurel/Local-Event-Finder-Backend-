@@ -203,6 +203,32 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
+    // ==================== REFUND MANAGEMENT ====================
+
+    @GetMapping("/refunds/pending")
+    public ResponseEntity<GenericApiResponse<List<PaymentResponseDto>>> getPendingRefunds() {
+        log.debug("Admin: Get pending refunds request");
+        GenericApiResponse<List<PaymentResponseDto>> response = adminService.getPendingRefunds();
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refunds/{paymentId}/process")
+    public ResponseEntity<GenericApiResponse<PaymentResponseDto>> processRefund(
+            @PathVariable Long paymentId,
+            @RequestParam(required = false) String note
+    ) {
+        log.debug("Admin: Process refund for payment: {}", paymentId);
+        GenericApiResponse<PaymentResponseDto> response = adminService.processRefund(paymentId, note);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/refunds/stats")
+    public ResponseEntity<GenericApiResponse<Map<String, Object>>> getRefundStats() {
+        log.debug("Admin: Get refund statistics request");
+        GenericApiResponse<Map<String, Object>> response = adminService.getRefundStats();
+        return ResponseEntity.ok(response);
+    }
+
     // ==================== ENROLLMENT MANAGEMENT ====================
 
     @GetMapping("/enrollments")

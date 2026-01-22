@@ -54,6 +54,15 @@ public class Payment {
     @Column(length = 1000)
     private String paymentData;
 
+    // Frontend callback URL to redirect after payment verification
+    @Column(length = 500)
+    private String callbackUrl;
+
+    // Refund tracking
+    private Boolean refundProcessed = false;  // Has admin actually processed the refund?
+    private LocalDateTime refundedAt;         // When refund was processed
+    private String refundNote;                // Admin notes about the refund
+
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
 

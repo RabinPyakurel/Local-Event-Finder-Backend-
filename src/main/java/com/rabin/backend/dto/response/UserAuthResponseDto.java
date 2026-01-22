@@ -1,6 +1,10 @@
 package com.rabin.backend.dto.response;
 
+import com.rabin.backend.model.Role;
 import lombok.Data;
+
+import java.util.List;
+import java.util.Set;
 
 @Data
 public class UserAuthResponseDto {
@@ -8,5 +12,5 @@ public class UserAuthResponseDto {
     private String message;
     private String fullName;
     private String email;
-    private String role;
+    private List<String> roles;
 }
