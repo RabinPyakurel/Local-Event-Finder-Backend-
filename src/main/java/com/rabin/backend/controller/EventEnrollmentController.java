@@ -116,4 +116,20 @@ public class EventEnrollmentController {
         );
     }
 
+    /**
+     * Get user's ticket for a specific event (with QR code)
+     */
+    @GetMapping("/ticket/{eventId}")
+    @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
+    public ResponseEntity<GenericApiResponse<EventTicketResponseDto>> getMyTicket(@PathVariable Long eventId) {
+        Long userId = SecurityUtil.getCurrentUserId();
+        log.debug("Get ticket for userId: {} eventId: {}", userId, eventId);
+
+        EventTicketResponseDto ticket = enrollmentService.getUserTicket(userId, eventId);
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Ticket retrieved successfully", ticket)
+        );
+    }
+
 }

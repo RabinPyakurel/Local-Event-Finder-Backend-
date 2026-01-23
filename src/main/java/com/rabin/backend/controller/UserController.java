@@ -3,13 +3,17 @@ package com.rabin.backend.controller;
 import com.rabin.backend.dto.GenericApiResponse;
 import com.rabin.backend.dto.request.UpdateInterestsDto;
 import com.rabin.backend.dto.request.UpdateProfileDto;
+import com.rabin.backend.dto.response.PublicProfileResponseDto;
 import com.rabin.backend.dto.response.UserProfileResponseDto;
 import com.rabin.backend.service.UserService;
 import com.rabin.backend.util.SecurityUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -59,6 +63,31 @@ public class UserController {
         Long userId = SecurityUtil.getCurrentUserId();
         log.debug("Update interests request for user: {}", userId);
         GenericApiResponse<List<String>> response = userService.updateUserInterests(userId, dto);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get public profile for any user (no authentication required)
+     * If authenticated, includes whether current user follows this profile
+     */
+    @GetMapping("/{userId}/public")
+    public ResponseEntity<GenericApiResponse<PublicProfileResponseDto>> getPublicProfile(
+            @PathVariable Long userId) {
+        log.debug("Get public profile request for user: {}", userId);
+
+        // Try to get current user ID if authenticated (optional)
+        Long currentUserId = null;
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                currentUserId = SecurityUtil.getCurrentUserId();
+            }
+        } catch (Exception e) {
+            // Not authenticated, that's fine for public profile
+            log.debug("Public profile accessed without authentication");
+        }
+
+        GenericApiResponse<PublicProfileResponseDto> response = userService.getPublicProfile(userId, currentUserId);
         return ResponseEntity.ok(response);
     }
 }

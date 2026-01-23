@@ -36,7 +36,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
@@ -96,9 +96,7 @@ server:
     max-http-form-post-size: 200MB
     max-swallow-size: 200MB
     max-parameter-count: 10000
-    # For Tomcat 11 (used in Spring Boot 4.x)
     max-part-count: 20
-
 
 # Logging configuration
 logging:

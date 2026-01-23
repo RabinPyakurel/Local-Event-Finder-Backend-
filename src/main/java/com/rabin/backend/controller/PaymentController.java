@@ -84,9 +84,19 @@ public class PaymentController {
             redirectParams.put("eventId", safeValue(payment.getEvent().getId().toString()));
             redirectParams.put("transactionId", safeValue(payment.getTransactionId()));
 
+            // Include event info for ticket/QR construction
+            redirectParams.put("eventTitle", safeValue(payment.getEvent().getTitle()));
+            if (payment.getEvent().getVenue() != null) {
+                redirectParams.put("venue", safeValue(payment.getEvent().getVenue()));
+            }
+            if (payment.getEvent().getStartDate() != null) {
+                redirectParams.put("eventDate", safeValue(payment.getEvent().getStartDate().toString()));
+            }
+
             if (payment.getEnrollment() != null) {
                 redirectParams.put("enrolled", "true");
                 redirectParams.put("ticketCode", safeValue(payment.getEnrollment().getTicketCode()));
+                redirectParams.put("enrollmentId", safeValue(payment.getEnrollment().getId().toString()));
             }
 
             // Build safe redirect URL
@@ -151,9 +161,19 @@ public class PaymentController {
             redirectParams.put("eventId", safeValue(payment.getEvent().getId().toString()));
             redirectParams.put("transactionId", safeValue(payment.getTransactionId()));
 
+            // Include event info for ticket/QR construction
+            redirectParams.put("eventTitle", safeValue(payment.getEvent().getTitle()));
+            if (payment.getEvent().getVenue() != null) {
+                redirectParams.put("venue", safeValue(payment.getEvent().getVenue()));
+            }
+            if (payment.getEvent().getStartDate() != null) {
+                redirectParams.put("eventDate", safeValue(payment.getEvent().getStartDate().toString()));
+            }
+
             if (payment.getEnrollment() != null) {
                 redirectParams.put("enrolled", "true");
                 redirectParams.put("ticketCode", safeValue(payment.getEnrollment().getTicketCode()));
+                redirectParams.put("enrollmentId", safeValue(payment.getEnrollment().getId().toString()));
             }
 
             String redirectUrl = RedirectUtil.buildSafeRedirectUrl(baseCallbackUrl, redirectParams);

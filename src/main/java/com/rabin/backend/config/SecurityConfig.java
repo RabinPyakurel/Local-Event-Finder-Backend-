@@ -54,6 +54,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/payments/khalti/verify", "/api/payments/esewa/verify").permitAll()
                         // Public GET endpoints for events
                         .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/*", "/api/events/explore", "/api/events/search").permitAll()
+                        // Public event interest count
+                        .requestMatchers(HttpMethod.GET, "/api/events/*/interest/count").permitAll()
+                        // Public user profiles (for follow/following)
+                        .requestMatchers(HttpMethod.GET, "/api/users/*/public").permitAll()
                         // All other requests require authentication
                         .anyRequest().authenticated()
                 )

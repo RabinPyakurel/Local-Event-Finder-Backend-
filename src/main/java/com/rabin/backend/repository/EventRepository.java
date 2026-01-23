@@ -22,4 +22,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     long countByEventStatus(EventStatus status);
 
     boolean existsByIdAndCreatedBy_Id(Long eventId, Long userId);
+
+    // Count events by organizer (for public profile stats)
+    long countByCreatedBy_Id(Long organizerId);
 }

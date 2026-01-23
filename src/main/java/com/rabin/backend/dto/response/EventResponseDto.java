@@ -30,4 +30,8 @@ public class EventResponseDto {
     private Double price;
     private Integer availableSeats;
     private Integer bookedSeats;
+
+    // Interest/Favorite stats
+    private Long interestCount;
+    private Boolean isInterested; // For authenticated users - whether current user is interested
 }

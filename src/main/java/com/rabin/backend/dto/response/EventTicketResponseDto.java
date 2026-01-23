@@ -10,13 +10,20 @@ import java.time.LocalDateTime;
 @Setter
 public class EventTicketResponseDto {
 
+    // Ticket info
     private String ticketCode;
+    private TicketStatus ticketStatus;
+    private LocalDateTime enrolledAt;
+    private LocalDateTime checkedInAt;
+
+    // Event info
+    private Long eventId;
     private String eventTitle;
+    private String eventImageUrl;
     private String venue;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
-    private TicketStatus ticketStatus;
-    private LocalDateTime enrolledAt;
 
-    private String qrCodeBase64;
+    // Organizer info
+    private String organizerName;
 }

@@ -3,12 +3,16 @@ package com.rabin.backend.service;
 import com.rabin.backend.dto.GenericApiResponse;
 import com.rabin.backend.dto.request.UpdateInterestsDto;
 import com.rabin.backend.dto.request.UpdateProfileDto;
+import com.rabin.backend.dto.response.PublicProfileResponseDto;
 import com.rabin.backend.dto.response.UserProfileResponseDto;
 import com.rabin.backend.enums.InterestCategory;
+import com.rabin.backend.enums.RoleName;
 import com.rabin.backend.exception.UserNotFoundException;
 import com.rabin.backend.model.EventTag;
 import com.rabin.backend.model.User;
 import com.rabin.backend.model.UserInterest;
+import com.rabin.backend.repository.EventInterestRepository;
+import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagRepository;
 import com.rabin.backend.repository.UserInterestRepository;
 import com.rabin.backend.repository.UserRepository;
@@ -28,13 +32,22 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserInterestRepository userInterestRepository;
     private final EventTagRepository eventTagRepository;
+    private final UserFollowService userFollowService;
+    private final EventRepository eventRepository;
+    private final EventInterestRepository eventInterestRepository;
 
     public UserService(UserRepository userRepository,
                        UserInterestRepository userInterestRepository,
-                       EventTagRepository eventTagRepository) {
+                       EventTagRepository eventTagRepository,
+                       UserFollowService userFollowService,
+                       EventRepository eventRepository,
+                       EventInterestRepository eventInterestRepository) {
         this.userRepository = userRepository;
         this.userInterestRepository = userInterestRepository;
         this.eventTagRepository = eventTagRepository;
+        this.userFollowService = userFollowService;
+        this.eventRepository = eventRepository;
+        this.eventInterestRepository = eventInterestRepository;
     }
 
     @Transactional(readOnly = true)
@@ -151,6 +164,61 @@ public class UserService {
         }
 
         return getUserInterests(userId);
+    }
+
+    /**
+     * Get public profile for a user (no authentication required)
+     * @param profileUserId The user whose profile to view
+     * @param currentUserId The currently logged-in user (null if not authenticated)
+     */
+    @Transactional(readOnly = true)
+    public GenericApiResponse<PublicProfileResponseDto> getPublicProfile(Long profileUserId, Long currentUserId) {
+        log.debug("Getting public profile for user: {}, requested by: {}", profileUserId, currentUserId);
+
+        User user = userRepository.findById(profileUserId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        PublicProfileResponseDto profile = new PublicProfileResponseDto();
+        profile.setId(user.getId());
+        profile.setFullName(user.getFullName());
+        profile.setProfileImageUrl(user.getProfileImageUrl());
+        profile.setJoinDate(user.getCreatedAt());
+
+        // Get user interests
+        List<UserInterest> userInterests = userInterestRepository.findByUser(user);
+        List<String> interests = userInterests.stream()
+                .map(ui -> ui.getCategory().name())
+                .collect(Collectors.toList());
+        profile.setInterests(interests);
+
+        // Get user roles
+        List<String> roles = user.getRoles().stream()
+                .map(role -> role.getName().name())
+                .collect(Collectors.toList());
+        profile.setRoles(roles);
+
+        // Get follow stats
+        profile.setFollowerCount(userFollowService.getFollowerCount(profileUserId));
+        profile.setFollowingCount(userFollowService.getFollowingCount(profileUserId));
+
+        // Check if current user is following this profile
+        if (currentUserId != null && !currentUserId.equals(profileUserId)) {
+            profile.setIsFollowing(userFollowService.isFollowing(currentUserId, profileUserId));
+        } else {
+            profile.setIsFollowing(false);
+        }
+
+        // If user is an organizer, get events count
+        boolean isOrganizer = user.getRoles().stream()
+                .anyMatch(role -> role.getName() == RoleName.ORGANIZER);
+        if (isOrganizer) {
+            profile.setEventsCreatedCount(eventRepository.countByCreatedBy_Id(profileUserId));
+        }
+
+        // Get interested events count
+        profile.setInterestedEventsCount(eventInterestRepository.countByUser_Id(profileUserId));
+
+        return GenericApiResponse.ok(200, "Public profile retrieved successfully", profile);
     }
 
     // Helper method

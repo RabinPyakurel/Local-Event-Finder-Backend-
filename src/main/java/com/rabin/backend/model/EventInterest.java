@@ -1,10 +1,6 @@
 package com.rabin.backend.model;
 
-import com.rabin.backend.enums.TicketStatus;
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,14 +17,14 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(
-        name = "event_enrollments",
+        name = "event_interests",
         uniqueConstraints = {
                 @UniqueConstraint(columnNames = {"user_id", "event_id"})
         }
 )
 @Getter
 @Setter
-public class EventEnrollment {
+public class EventInterest {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,19 +38,10 @@ public class EventEnrollment {
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;
 
-    @Column(nullable = false, unique = true)
-    private String ticketCode;
-
-    @Enumerated(EnumType.STRING)
-    private TicketStatus ticketStatus = TicketStatus.ACTIVE;
-
-    private LocalDateTime enrolledAt;
-
-    // Check-in tracking for QR verification
-    private LocalDateTime checkedInAt;
+    private LocalDateTime createdAt;
 
     @PrePersist
     void onCreate() {
-        enrolledAt = LocalDateTime.now();
+        createdAt = LocalDateTime.now();
     }
 }
