@@ -1,6 +1,7 @@
 package com.rabin.backend.service.auth;
 
 import com.rabin.backend.dto.GenericApiResponse;
+import com.rabin.backend.dto.request.AdminRegisterDto;
 import com.rabin.backend.dto.request.ChangePasswordDto;
 import com.rabin.backend.dto.request.LoginDto;
 import com.rabin.backend.dto.request.RegisterDto;
@@ -21,6 +22,7 @@ import com.rabin.backend.util.FileUtil;
 import com.rabin.backend.util.JwtService;
 import com.rabin.backend.util.ValidationUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,9 @@ public class AuthService {
     private final JwtService jwtService;
     private final EventTagRepository eventTagRepository;
     private final UserInterestRepository userInterestRepository;
+
+    @Value("${app.admin.secret-key}")
+    private String adminSecretKey;
 
     public AuthService(UserRepository userRepository,
                        RoleRepository roleRepository,
@@ -68,7 +73,13 @@ public class AuthService {
         }
 
         // Use USER role as default if not provided
+        // IMPORTANT: Prevent ADMIN registration through regular endpoint
         RoleName roleName = dto.getRole() != null ? dto.getRole() : RoleName.USER;
+        if (roleName == RoleName.ADMIN) {
+            log.warn("Attempt to register as ADMIN through regular endpoint blocked: {}", dto.getEmail());
+            throw new IllegalArgumentException("Admin registration requires special authorization");
+        }
+
         Role role = roleRepository.findByName(roleName)
                 .orElseThrow(() -> {
                     log.error("Role not found: {}", roleName);
@@ -170,6 +181,107 @@ public class AuthService {
 
         log.info("Password changed successfully for user: {}", userId);
         return GenericApiResponse.ok(200, "Password changed successfully", null);
+    }
+
+    // ----------------------- Admin Auth Methods -----------------------
+
+    @Transactional
+    public UserAuthResponseDto registerAdmin(AdminRegisterDto dto) {
+        log.debug("Admin register request received for email: {}", dto.getEmail());
+
+        // Validate admin secret key
+        if (dto.getAdminSecretKey() == null || !dto.getAdminSecretKey().equals(adminSecretKey)) {
+            log.warn("Admin registration failed - invalid secret key for: {}", dto.getEmail());
+            throw new IllegalArgumentException("Invalid admin secret key");
+        }
+
+        // Validate basic fields
+        if (dto.getFullName() == null || dto.getFullName().trim().length() < 2) {
+            throw new IllegalArgumentException("Full name must be at least 2 characters long");
+        }
+        if (!ValidationUtil.isValidEmail(dto.getEmail())) {
+            throw new IllegalArgumentException("Invalid email format");
+        }
+        String pwdError = ValidationUtil.validatePassword(dto.getPassword());
+        if (pwdError != null) {
+            throw new IllegalArgumentException(pwdError);
+        }
+        if (dto.getDob() == null) {
+            throw new IllegalArgumentException("Date of birth is required");
+        }
+        int age = Period.between(dto.getDob(), LocalDate.now()).getYears();
+        if (age < 18) {
+            throw new IllegalArgumentException("Admin must be at least 18 years old");
+        }
+
+        if (userRepository.existsByEmail(dto.getEmail())) {
+            log.warn("Admin registration failed - email already exists: {}", dto.getEmail());
+            throw new IllegalArgumentException("Email already exists");
+        }
+
+        Role adminRole = roleRepository.findByName(RoleName.ADMIN)
+                .orElseThrow(() -> {
+                    log.error("ADMIN role not found in database");
+                    return new IllegalArgumentException("Admin role not configured");
+                });
+
+        // Handle profile image upload
+        String profileImageUrl = null;
+        if (dto.getProfileImage() != null && !dto.getProfileImage().isEmpty()) {
+            try {
+                profileImageUrl = FileUtil.saveFile(dto.getProfileImage(), "profiles");
+                log.debug("Admin profile image saved: {}", profileImageUrl);
+            } catch (Exception e) {
+                log.error("Failed to save admin profile image", e);
+                throw new IllegalArgumentException("Failed to save profile image: " + e.getMessage());
+            }
+        }
+
+        User admin = new User();
+        admin.setFullName(dto.getFullName().trim());
+        admin.setEmail(dto.getEmail().trim().toLowerCase());
+        admin.setPassword(passwordEncoder.encode(dto.getPassword()));
+        admin.setDob(dto.getDob());
+        admin.setProfileImageUrl(profileImageUrl);
+        admin.setRoles(Collections.singleton(adminRole));
+        admin.setCreatedAt(LocalDateTime.now());
+        admin.setUpdatedAt(LocalDateTime.now());
+
+        userRepository.save(admin);
+        log.info("Admin registered successfully: {} (ID: {})", admin.getEmail(), admin.getId());
+
+        String token = jwtService.generateToken(admin);
+        return buildUserAuthResponse(admin, token, "Admin registration successful");
+    }
+
+    @Transactional
+    public UserAuthResponseDto adminLogin(LoginDto dto) {
+        log.debug("Admin login attempt for email: {}", dto.getEmail());
+        validateLoginInput(dto);
+
+        User user = userRepository.findByEmail(dto.getEmail())
+                .orElseThrow(() -> {
+                    log.warn("Admin login failed - user not found: {}", dto.getEmail());
+                    return new InvalidCredentialsException("Invalid email or password");
+                });
+
+        // Verify user has ADMIN role
+        boolean isAdmin = user.getRoles().stream()
+                .anyMatch(role -> role.getName() == RoleName.ADMIN);
+
+        if (!isAdmin) {
+            log.warn("Admin login failed - user is not an admin: {}", dto.getEmail());
+            throw new InvalidCredentialsException("Access denied. Admin privileges required.");
+        }
+
+        if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
+            log.warn("Admin login failed - invalid password for: {}", user.getId());
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
+
+        log.info("Admin logged in successfully: {}", user.getId());
+        String token = jwtService.generateToken(user);
+        return buildUserAuthResponse(user, token, "Admin login successful");
     }
 
     // ----------------------- Helper Methods -----------------------

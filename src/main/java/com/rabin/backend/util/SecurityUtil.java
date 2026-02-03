@@ -1,6 +1,5 @@
 package com.rabin.backend.util;
 
-import com.rabin.backend.model.User;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.rabin.backend.security.CustomUserDetails;

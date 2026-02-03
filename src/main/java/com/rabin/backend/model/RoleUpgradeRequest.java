@@ -1,18 +1,16 @@
 package com.rabin.backend.model;
 
-import com.rabin.backend.enums.TicketStatus;
+import com.rabin.backend.enums.RoleUpgradeStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,41 +18,37 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-        name = "event_enrollments",
-        indexes = {
-                @Index(name = "idx_enrollment_user_event", columnList = "user_id, event_id")
-        }
-)
+@Table(name = "role_upgrade_requests")
 @Getter
 @Setter
-public class EventEnrollment {
+public class RoleUpgradeRequest {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "event_id", nullable = false)
-    private Event event;
-
-    @Column(nullable = false, unique = true)
-    private String ticketCode;
+    @Column(length = 1000)
+    private String reason;  // Why user wants to become organizer
 
     @Enumerated(EnumType.STRING)
-    private TicketStatus ticketStatus = TicketStatus.ACTIVE;
+    private RoleUpgradeStatus status = RoleUpgradeStatus.PENDING;
 
-    private LocalDateTime enrolledAt;
+    @ManyToOne
+    @JoinColumn(name = "reviewed_by")
+    private User reviewedBy;  // Admin who reviewed the request
 
-    // Check-in tracking for QR verification
-    private LocalDateTime checkedInAt;
+    @Column(length = 500)
+    private String adminNote;  // Admin's note for approval/rejection
+
+    private LocalDateTime createdAt;
+    private LocalDateTime reviewedAt;
 
     @PrePersist
     void onCreate() {
-        enrolledAt = LocalDateTime.now();
+        createdAt = LocalDateTime.now();
     }
 }

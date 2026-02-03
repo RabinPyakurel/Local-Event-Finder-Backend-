@@ -4,6 +4,12 @@ import com.rabin.backend.dto.GenericApiResponse;
 import com.rabin.backend.dto.response.InterestedEventResponseDto;
 import com.rabin.backend.service.event.EventInterestService;
 import com.rabin.backend.util.SecurityUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -22,17 +28,22 @@ import java.util.Map;
 @RequestMapping("/api/events")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Event Interest", description = "APIs for marking events as interested (like/heart functionality)")
 public class EventInterestController {
 
     private final EventInterestService interestService;
 
-    /**
-     * Mark an event as interested (click heart)
-     */
+    @Operation(summary = "Mark event as interested", description = "Mark an event as interested (click heart)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event marked as interested"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/{eventId}/interest")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<Map<String, Object>>> addInterest(
-            @PathVariable Long eventId
+            @Parameter(description = "Event ID") @PathVariable Long eventId
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
         log.debug("Add interest for eventId={} by userId={}", eventId, userId);
@@ -47,13 +58,17 @@ public class EventInterestController {
         );
     }
 
-    /**
-     * Remove interest from an event (unclick heart)
-     */
+    @Operation(summary = "Remove interest from event", description = "Remove interest from an event (unclick heart)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Interest removed from event"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @DeleteMapping("/{eventId}/interest")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<Map<String, Object>>> removeInterest(
-            @PathVariable Long eventId
+            @Parameter(description = "Event ID") @PathVariable Long eventId
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
         log.debug("Remove interest for eventId={} by userId={}", eventId, userId);
@@ -68,13 +83,17 @@ public class EventInterestController {
         );
     }
 
-    /**
-     * Toggle interest (add if not exists, remove if exists)
-     */
+    @Operation(summary = "Toggle interest", description = "Toggle interest on an event (add if not exists, remove if exists)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Interest toggled successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/{eventId}/interest/toggle")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<Map<String, Object>>> toggleInterest(
-            @PathVariable Long eventId
+            @Parameter(description = "Event ID") @PathVariable Long eventId
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
         log.debug("Toggle interest for eventId={} by userId={}", eventId, userId);
@@ -90,13 +109,17 @@ public class EventInterestController {
         );
     }
 
-    /**
-     * Check if user is interested in an event
-     */
+    @Operation(summary = "Check interest status", description = "Check if current user is interested in an event")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Interest status retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/{eventId}/interest/check")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<Map<String, Object>>> checkInterest(
-            @PathVariable Long eventId
+            @Parameter(description = "Event ID") @PathVariable Long eventId
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
         log.debug("Check interest for eventId={} by userId={}", eventId, userId);
@@ -111,12 +134,14 @@ public class EventInterestController {
         );
     }
 
-    /**
-     * Get event interest count (public)
-     */
+    @Operation(summary = "Get interest count", description = "Get the total interest count for an event (public endpoint)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Interest count retrieved"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
     @GetMapping("/{eventId}/interest/count")
     public ResponseEntity<GenericApiResponse<Map<String, Long>>> getInterestCount(
-            @PathVariable Long eventId
+            @Parameter(description = "Event ID") @PathVariable Long eventId
     ) {
         log.debug("Get interest count for eventId={}", eventId);
 
@@ -129,9 +154,12 @@ public class EventInterestController {
         );
     }
 
-    /**
-     * Get all events user is interested in (for profile page)
-     */
+    @Operation(summary = "Get user's interested events", description = "Get all events the current user is interested in (for profile page)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Interested events retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/interested")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<List<InterestedEventResponseDto>>> getUserInterestedEvents() {

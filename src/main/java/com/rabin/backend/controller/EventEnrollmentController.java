@@ -6,6 +6,12 @@ import com.rabin.backend.dto.response.EventEnrollmentResponseDto;
 import com.rabin.backend.dto.response.EventTicketResponseDto;
 import com.rabin.backend.service.event.EventEnrollmentService;
 import com.rabin.backend.util.SecurityUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,6 +30,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/enrollments")
 @Slf4j
+@Tag(name = "Event Enrollments", description = "APIs for enrolling in events and managing tickets")
 public class EventEnrollmentController {
 
     private final EventEnrollmentService enrollmentService;
@@ -32,24 +39,38 @@ public class EventEnrollmentController {
         this.enrollmentService = enrollmentService;
     }
 
+    @Operation(summary = "Enroll in event", description = "Enroll in a free event and get tickets. For paid events, use the payment flow instead.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Enrolled successfully"),
+            @ApiResponse(responseCode = "400", description = "Event is full or paid event requires payment"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @PostMapping
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<GenericApiResponse<EventTicketResponseDto>> enroll(
+    public ResponseEntity<GenericApiResponse<List<EventTicketResponseDto>>> enroll(
             @RequestBody EventEnrollmentRequestDto dto
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
-        log.debug("Enroll API called by userId {}", userId);
+        log.debug("Enroll API called by userId {} for {} tickets", userId, dto.getNumberOfTickets());
 
-        EventTicketResponseDto ticket = enrollmentService.enroll(userId, dto.getEventId());
+        List<EventTicketResponseDto> tickets = enrollmentService.enroll(userId, dto.getEventId(), dto.getNumberOfTickets());
+
+        String message = tickets.size() == 1 ? "Enrolled successfully" :
+                String.format("%d tickets booked successfully", tickets.size());
 
         return ResponseEntity.ok(
-                GenericApiResponse.ok(200, "Enrolled successfully", ticket)
+                GenericApiResponse.ok(200, message, tickets)
         );
     }
 
-    /**
-     * Get all enrollments for the current user
-     */
+    @Operation(summary = "Get my enrollments", description = "Get all event enrollments for the current user")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Enrollments retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<List<EventEnrollmentResponseDto>>> getUserEnrollments() {
@@ -63,13 +84,18 @@ public class EventEnrollmentController {
         );
     }
 
-    /**
-     * Get all enrollments for a specific event (organizer only)
-     */
+    @Operation(summary = "Get event enrollments", description = "Get all enrollments for a specific event. Only available to event organizer or admin.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Enrollments retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Not authorized to view this event's enrollments"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/event/{eventId}")
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<List<EventEnrollmentResponseDto>>> getEventEnrollments(
-            @PathVariable Long eventId
+            @Parameter(description = "Event ID") @PathVariable Long eventId
     ) {
         Long userId = SecurityUtil.getCurrentUserId();
         log.debug("Get event enrollments for eventId: {} by userId: {}", eventId, userId);
@@ -81,12 +107,18 @@ public class EventEnrollmentController {
         );
     }
 
-    /**
-     * Cancel an enrollment
-     */
+    @Operation(summary = "Cancel enrollment", description = "Cancel an enrollment. Refund will be processed for paid events.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Enrollment cancelled successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Not authorized to cancel this enrollment"),
+            @ApiResponse(responseCode = "404", description = "Enrollment not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @DeleteMapping("/{enrollmentId}")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<GenericApiResponse<Void>> cancelEnrollment(@PathVariable Long enrollmentId) {
+    public ResponseEntity<GenericApiResponse<Void>> cancelEnrollment(
+            @Parameter(description = "Enrollment ID") @PathVariable Long enrollmentId) {
         Long userId = SecurityUtil.getCurrentUserId();
         log.debug("Cancel enrollment {} by userId: {}", enrollmentId, userId);
 
@@ -97,12 +129,16 @@ public class EventEnrollmentController {
         );
     }
 
-    /**
-     * Check if user is enrolled in an event
-     */
+    @Operation(summary = "Check enrollment status", description = "Check if the current user is enrolled in an event")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Enrollment status checked"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/check/{eventId}")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<GenericApiResponse<Map<String, Boolean>>> checkEnrollment(@PathVariable Long eventId) {
+    public ResponseEntity<GenericApiResponse<Map<String, Boolean>>> checkEnrollment(
+            @Parameter(description = "Event ID") @PathVariable Long eventId) {
         Long userId = SecurityUtil.getCurrentUserId();
         log.debug("Check enrollment for userId: {} and eventId: {}", userId, eventId);
 
@@ -116,20 +152,24 @@ public class EventEnrollmentController {
         );
     }
 
-    /**
-     * Get user's ticket for a specific event (with QR code)
-     */
+    @Operation(summary = "Get my tickets", description = "Get all tickets for the current user for a specific event")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Tickets retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/ticket/{eventId}")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<GenericApiResponse<EventTicketResponseDto>> getMyTicket(@PathVariable Long eventId) {
+    public ResponseEntity<GenericApiResponse<List<EventTicketResponseDto>>> getMyTickets(
+            @Parameter(description = "Event ID") @PathVariable Long eventId) {
         Long userId = SecurityUtil.getCurrentUserId();
-        log.debug("Get ticket for userId: {} eventId: {}", userId, eventId);
+        log.debug("Get tickets for userId: {} eventId: {}", userId, eventId);
 
-        EventTicketResponseDto ticket = enrollmentService.getUserTicket(userId, eventId);
+        List<EventTicketResponseDto> tickets = enrollmentService.getUserTickets(userId, eventId);
 
         return ResponseEntity.ok(
-                GenericApiResponse.ok(200, "Ticket retrieved successfully", ticket)
+                GenericApiResponse.ok(200, "Tickets retrieved successfully", tickets)
         );
     }
-
 }

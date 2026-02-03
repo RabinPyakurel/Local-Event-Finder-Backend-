@@ -6,6 +6,11 @@ import com.rabin.backend.enums.InterestCategory;
 import com.rabin.backend.repository.EventTagRepository;
 import com.rabin.backend.repository.GroupRepository;
 import com.rabin.backend.service.event.EventService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -24,12 +29,17 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/public")
 @Slf4j
 @RequiredArgsConstructor
+@Tag(name = "Public", description = "Public APIs - No authentication required")
 public class PublicController {
 
     private final GroupRepository groupRepository;
     private final EventTagRepository eventTagRepository;
     private final EventService eventService;
 
+    @Operation(summary = "Get all interest categories", description = "Get all available interest categories for event tagging and user preferences")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Interest categories retrieved successfully")
+    })
     @GetMapping("/interests")
     public ResponseEntity<GenericApiResponse<List<Map<String, String>>>> getAllInterests() {
         log.debug("Public request for all interest categories");
@@ -47,6 +57,10 @@ public class PublicController {
                 "Interest categories retrieved successfully", interests));
     }
 
+    @Operation(summary = "Get all event tags", description = "Get all available event tags")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event tags retrieved successfully")
+    })
     @GetMapping("/tags")
     public ResponseEntity<GenericApiResponse<List<Map<String, Object>>>> getAllTags() {
         log.debug("Public request for all event tags");
@@ -65,6 +79,10 @@ public class PublicController {
                 "Event tags retrieved successfully", tags));
     }
 
+    @Operation(summary = "Get all public groups", description = "Get all active groups available for joining")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Groups retrieved successfully")
+    })
     @GetMapping("/groups")
     public ResponseEntity<GenericApiResponse<List<Map<String, Object>>>> getAllPublicGroups() {
         log.debug("Public request for all active groups");
@@ -86,17 +104,17 @@ public class PublicController {
                 "Groups retrieved successfully", groups));
     }
 
-    /**
-     * Get all active events (no authentication required)
-     * Can filter by location, tags, and search term
-     */
+    @Operation(summary = "Get public events", description = "Get all active events with optional filters for location, tags, and search term")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Events retrieved successfully")
+    })
     @GetMapping("/events")
     public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getPublicEvents(
-            @RequestParam(required = false) Double lat,
-            @RequestParam(required = false) Double lon,
-            @RequestParam(required = false) Double radius,
-            @RequestParam(required = false) List<String> tags,
-            @RequestParam(required = false) String q
+            @Parameter(description = "Latitude for location filter") @RequestParam(required = false) Double lat,
+            @Parameter(description = "Longitude for location filter") @RequestParam(required = false) Double lon,
+            @Parameter(description = "Search radius in km") @RequestParam(required = false) Double radius,
+            @Parameter(description = "Filter by tags") @RequestParam(required = false) List<String> tags,
+            @Parameter(description = "Search query") @RequestParam(required = false) String q
     ) {
         log.debug("Public events request - lat={}, lon={}, radius={}, tags={}, query={}",
                 lat, lon, radius, tags, q);
@@ -115,15 +133,16 @@ public class PublicController {
                 "Events retrieved successfully", events));
     }
 
-    /**
-     * Get events by location (no authentication required)
-     * Specifically for location-based filtering
-     */
+    @Operation(summary = "Get nearby events", description = "Get events within a specified radius from the given location")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Nearby events retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Latitude and longitude are required")
+    })
     @GetMapping("/events/nearby")
     public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getNearbyEvents(
-            @RequestParam Double lat,
-            @RequestParam Double lon,
-            @RequestParam(required = false, defaultValue = "50") Double radius
+            @Parameter(description = "Latitude", required = true) @RequestParam Double lat,
+            @Parameter(description = "Longitude", required = true) @RequestParam Double lon,
+            @Parameter(description = "Search radius in km (default: 50)") @RequestParam(required = false, defaultValue = "50") Double radius
     ) {
         log.debug("Public nearby events request - lat={}, lon={}, radius={}km", lat, lon, radius);
 

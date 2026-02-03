@@ -711,4 +711,96 @@ public class AdminService {
         return dto;
     }
 
+    // ==================== ENHANCED ANALYTICS ====================
+
+    public GenericApiResponse<Map<String, Object>> getComprehensiveAnalytics() {
+        log.debug("Admin: Getting comprehensive analytics");
+
+        Map<String, Object> analytics = new HashMap<>();
+
+        // Event statistics by status
+        Map<String, Long> eventsByStatus = new HashMap<>();
+        eventsByStatus.put("active", eventRepository.countByEventStatus(EventStatus.ACTIVE));
+        eventsByStatus.put("inactive", eventRepository.countByEventStatus(EventStatus.INACTIVE));
+        eventsByStatus.put("cancelled", eventRepository.countByEventStatus(EventStatus.CANCELLED));
+        eventsByStatus.put("completed", eventRepository.countByEventStatus(EventStatus.COMPLETED));
+        eventsByStatus.put("total", eventRepository.count());
+        analytics.put("eventsByStatus", eventsByStatus);
+
+        // Paid vs free events
+        List<Event> allEvents = eventRepository.findAll();
+        long paidEvents = allEvents.stream().filter(e -> Boolean.TRUE.equals(e.getIsPaid())).count();
+        long freeEvents = allEvents.size() - paidEvents;
+        Map<String, Long> eventsByType = new HashMap<>();
+        eventsByType.put("paid", paidEvents);
+        eventsByType.put("free", freeEvents);
+        analytics.put("eventsByType", eventsByType);
+
+        // Revenue analytics
+        List<Payment> completedPayments = paymentRepository.findAll().stream()
+                .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
+                .collect(Collectors.toList());
+
+        double totalRevenue = completedPayments.stream().mapToDouble(Payment::getAmount).sum();
+        double refundedAmount = paymentRepository.findAll().stream()
+                .filter(p -> p.getPaymentStatus() == PaymentStatus.REFUNDED)
+                .mapToDouble(Payment::getAmount).sum();
+        double netRevenue = totalRevenue - refundedAmount;
+
+        Map<String, Object> revenueStats = new HashMap<>();
+        revenueStats.put("totalRevenue", totalRevenue);
+        revenueStats.put("refundedAmount", refundedAmount);
+        revenueStats.put("netRevenue", netRevenue);
+        revenueStats.put("totalTransactions", completedPayments.size());
+        analytics.put("revenue", revenueStats);
+
+        // Top organizers (by event count)
+        Map<Long, Long> organizerEventCount = allEvents.stream()
+                .collect(Collectors.groupingBy(
+                        e -> e.getCreatedBy().getId(),
+                        Collectors.counting()
+                ));
+
+        List<Map<String, Object>> topOrganizers = organizerEventCount.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .limit(10)
+                .map(entry -> {
+                    User organizer = userRepository.findById(entry.getKey()).orElse(null);
+                    if (organizer == null) return null;
+
+                    // Calculate revenue for this organizer
+                    double organizerRevenue = completedPayments.stream()
+                            .filter(p -> p.getEvent().getCreatedBy().getId().equals(entry.getKey()))
+                            .mapToDouble(Payment::getAmount).sum();
+
+                    long enrollments = allEvents.stream()
+                            .filter(e -> e.getCreatedBy().getId().equals(entry.getKey()))
+                            .mapToInt(e -> e.getBookedSeats() != null ? e.getBookedSeats() : 0)
+                            .sum();
+
+                    Map<String, Object> orgData = new HashMap<>();
+                    orgData.put("id", organizer.getId());
+                    orgData.put("fullName", organizer.getFullName());
+                    orgData.put("email", organizer.getEmail());
+                    orgData.put("profileImageUrl", organizer.getProfileImageUrl());
+                    orgData.put("eventCount", entry.getValue());
+                    orgData.put("totalEnrollments", enrollments);
+                    orgData.put("totalRevenue", organizerRevenue);
+                    return orgData;
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+
+        analytics.put("topOrganizers", topOrganizers);
+
+        // Ticket stats
+        long totalTickets = eventEnrollmentRepository.count();
+        Map<String, Long> ticketStats = new HashMap<>();
+        ticketStats.put("total", totalTickets);
+        analytics.put("tickets", ticketStats);
+
+        log.info("Admin: Comprehensive analytics retrieved successfully");
+        return GenericApiResponse.ok(200, "Comprehensive analytics retrieved successfully", analytics);
+    }
+
 }

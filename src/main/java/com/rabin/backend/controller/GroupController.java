@@ -6,6 +6,12 @@ import com.rabin.backend.dto.response.GroupMembershipResponseDto;
 import com.rabin.backend.dto.response.GroupResponseDto;
 import com.rabin.backend.service.GroupService;
 import com.rabin.backend.util.SecurityUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,20 +29,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Controller for managing groups and group memberships
- */
 @RestController
 @RequestMapping("/api/groups")
 @RequiredArgsConstructor
+@Tag(name = "Groups", description = "APIs for managing groups and group memberships")
+@SecurityRequirement(name = "bearerAuth")
 public class GroupController {
 
     private final GroupService groupService;
 
-    /**
-     * Create a new group
-     * Only ORGANIZER or ADMIN can create groups
-     */
+    @Operation(summary = "Create a group", description = "Create a new group. Only ORGANIZER or ADMIN can create groups.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Group created successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid group data"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Only organizers or admins can create groups")
+    })
     @PostMapping
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
     public ResponseEntity<?> createGroup(@ModelAttribute GroupRequestDto dto) {
@@ -51,15 +59,20 @@ public class GroupController {
         }
     }
 
-    /**
-     * Update a group
-     */
+    @Operation(summary = "Update a group", description = "Update an existing group")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Group updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid group data"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Not authorized to update this group"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
     @PutMapping("/{groupId}")
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
     public ResponseEntity<?> updateGroup(
-            @PathVariable Long groupId,
+            @Parameter(description = "Group ID") @PathVariable Long groupId,
             @ModelAttribute GroupRequestDto dto
-) {
+    ) {
         try {
             Long currentUserId = SecurityUtil.getCurrentUserId();
             GroupResponseDto group = groupService.updateGroup(groupId, currentUserId, dto);
@@ -71,14 +84,17 @@ public class GroupController {
         }
     }
 
-    /**
-     * Get group details
-     */
+    @Operation(summary = "Get group details", description = "Get details of a specific group")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Group details retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
     @GetMapping("/{groupId}")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<?> getGroup(
-            @PathVariable Long groupId
-) {
+            @Parameter(description = "Group ID") @PathVariable Long groupId
+    ) {
         try {
             Long currentUserId = SecurityUtil.getCurrentUserId();
             GroupResponseDto group = groupService.getGroup(groupId, currentUserId);
@@ -90,13 +106,14 @@ public class GroupController {
         }
     }
 
-    /**
-     * Get all active groups
-     */
+    @Operation(summary = "Get all groups", description = "Get all active groups")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Groups retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     @GetMapping
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> getAllGroups(
-) {
+    public ResponseEntity<?> getAllGroups() {
         try {
             Long currentUserId = SecurityUtil.getCurrentUserId();
             List<GroupResponseDto> groups = groupService.getAllGroups(currentUserId);
@@ -108,13 +125,14 @@ public class GroupController {
         }
     }
 
-    /**
-     * Get groups user is member of
-     */
+    @Operation(summary = "Get my groups", description = "Get groups the current user is a member of")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "User groups retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     @GetMapping("/my-groups")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> getUserGroups(
-) {
+    public ResponseEntity<?> getUserGroups() {
         try {
             Long currentUserId = SecurityUtil.getCurrentUserId();
             List<GroupResponseDto> groups = groupService.getUserGroups(currentUserId);
@@ -126,14 +144,18 @@ public class GroupController {
         }
     }
 
-    /**
-     * Join a group
-     */
+    @Operation(summary = "Join a group", description = "Join a group as a member")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully joined group or request pending approval"),
+            @ApiResponse(responseCode = "400", description = "Already a member or banned"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
     @PostMapping("/{groupId}/join")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<?> joinGroup(
-            @PathVariable Long groupId
-) {
+            @Parameter(description = "Group ID") @PathVariable Long groupId
+    ) {
         try {
             Long currentUserId = SecurityUtil.getCurrentUserId();
             GroupMembershipResponseDto membership = groupService.joinGroup(groupId, currentUserId);
@@ -145,14 +167,18 @@ public class GroupController {
         }
     }
 
-    /**
-     * Leave a group
-     */
+    @Operation(summary = "Leave a group", description = "Leave a group")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully left group"),
+            @ApiResponse(responseCode = "400", description = "Not a member of this group"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
     @DeleteMapping("/{groupId}/leave")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<?> leaveGroup(
-            @PathVariable Long groupId
-) {
+            @Parameter(description = "Group ID") @PathVariable Long groupId
+    ) {
         try {
             Long currentUserId = SecurityUtil.getCurrentUserId();
             groupService.leaveGroup(groupId, currentUserId);
@@ -167,13 +193,16 @@ public class GroupController {
         }
     }
 
-    /**
-     * Get group members
-     */
+    @Operation(summary = "Get group members", description = "Get all members of a group")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Group members retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
     @GetMapping("/{groupId}/members")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> getGroupMembers(@PathVariable Long groupId) {
-
+    public ResponseEntity<?> getGroupMembers(
+            @Parameter(description = "Group ID") @PathVariable Long groupId) {
         try {
             List<GroupMembershipResponseDto> members = groupService.getGroupMembers(groupId);
             return ResponseEntity.ok(members);
@@ -184,16 +213,21 @@ public class GroupController {
         }
     }
 
-    /**
-     * Add event to group
-     */
+    @Operation(summary = "Add event to group", description = "Add an event to a group")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event added to group successfully"),
+            @ApiResponse(responseCode = "400", description = "Event already in group or invalid"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Not authorized to add events to this group"),
+            @ApiResponse(responseCode = "404", description = "Group or event not found")
+    })
     @PostMapping("/{groupId}/events/{eventId}")
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
     public ResponseEntity<?> addEventToGroup(
-            @PathVariable Long groupId,
-            @PathVariable Long eventId,
-            @RequestParam(required = false, defaultValue = "false") Boolean isPrivate
-) {
+            @Parameter(description = "Group ID") @PathVariable Long groupId,
+            @Parameter(description = "Event ID") @PathVariable Long eventId,
+            @Parameter(description = "Whether the event is private to group members") @RequestParam(required = false, defaultValue = "false") Boolean isPrivate
+    ) {
         try {
             Long currentUserId = SecurityUtil.getCurrentUserId();
             groupService.addEventToGroup(groupId, eventId, currentUserId, isPrivate);
@@ -208,14 +242,17 @@ public class GroupController {
         }
     }
 
-    /**
-     * Get events for a group
-     */
+    @Operation(summary = "Get group events", description = "Get all events in a group")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Group events retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
     @GetMapping("/{groupId}/events")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
     public ResponseEntity<?> getGroupEvents(
-            @PathVariable Long groupId
-) {
+            @Parameter(description = "Group ID") @PathVariable Long groupId
+    ) {
         try {
             Long currentUserId = SecurityUtil.getCurrentUserId();
             List<EventResponseDto> events = groupService.getGroupEvents(groupId, currentUserId);
@@ -226,5 +263,4 @@ public class GroupController {
             return ResponseEntity.badRequest().body(error);
         }
     }
-
 }

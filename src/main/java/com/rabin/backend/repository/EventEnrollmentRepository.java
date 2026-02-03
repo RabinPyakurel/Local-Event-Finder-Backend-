@@ -10,10 +10,11 @@ import java.util.Optional;
 @Repository
 public interface EventEnrollmentRepository extends JpaRepository<EventEnrollment, Long> {
 
-    // Prevent duplicate enrollment
+    // Check if user has any enrollment for event
     boolean existsByUser_IdAndEvent_Id(Long userId, Long eventId);
-    Optional<EventEnrollment> findByTicketCode(String ticketCode);
 
+    // Find by ticket code
+    Optional<EventEnrollment> findByTicketCode(String ticketCode);
 
     // Organizer views enrollments
     List<EventEnrollment> findByEvent_Id(Long eventId);
@@ -21,8 +22,15 @@ public interface EventEnrollmentRepository extends JpaRepository<EventEnrollment
     // Count enrollments for an event
     long countByEvent_Id(Long eventId);
 
+    // Count user's tickets for a specific event
+    long countByUser_IdAndEvent_Id(Long userId, Long eventId);
+
     // User views own enrollments
     List<EventEnrollment> findByUser_Id(Long userId);
 
-    Optional<EventEnrollment> findByUser_IdAndEvent_Id(Long userId, Long eventId);
+    // Get all user's tickets for an event
+    List<EventEnrollment> findByUser_IdAndEvent_Id(Long userId, Long eventId);
+
+    // Get first/any user ticket for event (for backward compatibility)
+    Optional<EventEnrollment> findFirstByUser_IdAndEvent_Id(Long userId, Long eventId);
 }

@@ -50,6 +50,7 @@ public class Event {
     private Double price = 0.0;  // Price in NPR (Nepali Rupees)
     private Integer availableSeats;  // Null = unlimited
     private Integer bookedSeats = 0;
+    private Integer maxTicketsPerUser = 10;  // Max tickets one user can book (default 10)
 
     @ManyToOne
     @JoinColumn(name = "created_by")

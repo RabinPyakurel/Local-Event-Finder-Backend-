@@ -5,6 +5,12 @@ import com.rabin.backend.dto.request.TicketVerifyRequestDto;
 import com.rabin.backend.dto.response.TicketVerifyResponseDto;
 import com.rabin.backend.service.event.TicketService;
 import com.rabin.backend.util.SecurityUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/tickets")
 @Slf4j
+@Tag(name = "Tickets", description = "Ticket verification and check-in APIs for organizers")
+@SecurityRequirement(name = "bearerAuth")
 public class TicketController {
 
     private final TicketService ticketService;
@@ -26,9 +34,13 @@ public class TicketController {
         this.ticketService = ticketService;
     }
 
-    /**
-     * Verify and check-in a ticket (via request body)
-     */
+    @Operation(summary = "Verify ticket", description = "Verify and check-in a ticket using the ticket code from request body")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ticket verified (check response for validity)"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Not authorized to verify tickets for this event"),
+            @ApiResponse(responseCode = "404", description = "Ticket not found")
+    })
     @PostMapping("/verify")
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<TicketVerifyResponseDto>> verifyTicket(
@@ -43,13 +55,17 @@ public class TicketController {
         return ResponseEntity.ok(GenericApiResponse.ok(200, message, response));
     }
 
-    /**
-     * Scan and check-in a ticket (via path variable - easier for QR scan apps)
-     */
+    @Operation(summary = "Scan ticket", description = "Verify and check-in a ticket using the ticket code from URL path. Ideal for QR scan apps.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ticket scanned (check response for validity)"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Not authorized to verify tickets for this event"),
+            @ApiResponse(responseCode = "404", description = "Ticket not found")
+    })
     @PostMapping("/scan/{ticketCode}")
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<TicketVerifyResponseDto>> scanTicket(
-            @PathVariable String ticketCode
+            @Parameter(description = "Ticket code from QR scan") @PathVariable String ticketCode
     ) {
         Long organizerId = SecurityUtil.getCurrentUserId();
         log.debug("Ticket scan API called by organizerId={} ticketCode={}", organizerId, ticketCode);
@@ -60,13 +76,17 @@ public class TicketController {
         return ResponseEntity.ok(GenericApiResponse.ok(200, message, response));
     }
 
-    /**
-     * Get ticket details without checking in (preview before confirming)
-     */
+    @Operation(summary = "Get ticket details", description = "Get ticket details without checking in (preview before confirming)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ticket details retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Not authorized to view tickets for this event"),
+            @ApiResponse(responseCode = "404", description = "Ticket not found")
+    })
     @GetMapping("/{ticketCode}")
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
     public ResponseEntity<GenericApiResponse<TicketVerifyResponseDto>> getTicketDetails(
-            @PathVariable String ticketCode
+            @Parameter(description = "Ticket code") @PathVariable String ticketCode
     ) {
         Long organizerId = SecurityUtil.getCurrentUserId();
         log.debug("Get ticket details by organizerId={} ticketCode={}", organizerId, ticketCode);
@@ -76,4 +96,3 @@ public class TicketController {
         return ResponseEntity.ok(GenericApiResponse.ok(200, "Ticket details retrieved", response));
     }
 }
-

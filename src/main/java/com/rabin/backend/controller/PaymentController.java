@@ -4,6 +4,12 @@ import com.rabin.backend.dto.request.PaymentInitiateDto;
 import com.rabin.backend.model.Payment;
 import com.rabin.backend.service.payment.PaymentService;
 import com.rabin.backend.util.RedirectUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +26,7 @@ import java.util.Map;
 @RequestMapping("/api/payments")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Payments", description = "Payment processing APIs for Khalti and eSewa")
 public class PaymentController {
 
     private final PaymentService paymentService;
@@ -27,6 +34,13 @@ public class PaymentController {
     @Value("${app.frontend-url:http://localhost:5173}")
     private String frontendUrl;
 
+    @Operation(summary = "Initiate payment", description = "Initiate a payment for a paid event. Returns payment gateway form data.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Payment initiated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or event is free"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/initiate")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER')")
     public ResponseEntity<?> initiatePayment(@RequestBody PaymentInitiateDto dto) {
@@ -40,13 +54,13 @@ public class PaymentController {
         }
     }
 
-    /**
-     * Verify Khalti payment
-     * Log all parameters to debug CR/LF issue
-     */
+    @Operation(summary = "Khalti payment callback", description = "Callback endpoint for Khalti payment verification. Redirects to frontend with payment status.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "302", description = "Redirects to frontend callback URL")
+    })
     @GetMapping("/khalti/verify")
     public void verifyKhaltiPayment(
-            @RequestParam Map<String, String> allParams,
+            @Parameter(description = "Khalti callback parameters") @RequestParam Map<String, String> allParams,
             HttpServletResponse response) throws IOException {
 
         log.info("=== KHALTI PAYMENT CALLBACK ===");
@@ -123,9 +137,13 @@ public class PaymentController {
         }
     }
 
+    @Operation(summary = "eSewa payment callback", description = "Callback endpoint for eSewa payment verification. Redirects to frontend with payment status.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "302", description = "Redirects to frontend callback URL")
+    })
     @GetMapping("/esewa/verify")
     public void verifyEsewaPayment(
-            @RequestParam Map<String, String> allParams,
+            @Parameter(description = "eSewa callback parameters") @RequestParam Map<String, String> allParams,
             HttpServletResponse response) throws IOException {
 
         log.info("=== ESEWA PAYMENT CALLBACK ===");
@@ -197,9 +215,17 @@ public class PaymentController {
         }
     }
 
+    @Operation(summary = "Get payment status", description = "Get the status of a payment by transaction ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Payment status retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Payment not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/status/{transactionId}")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER')")
-    public ResponseEntity<?> getPaymentStatus(@PathVariable String transactionId) {
+    public ResponseEntity<?> getPaymentStatus(
+            @Parameter(description = "Transaction ID") @PathVariable String transactionId) {
         try {
             Payment payment = paymentService.getPaymentByTransactionId(transactionId);
 
@@ -218,12 +244,8 @@ public class PaymentController {
         }
     }
 
-    /**
-     * Helper method to ensure string values don't contain CR/LF
-     */
     private String safeValue(String value) {
         if (value == null) return "";
-        // Remove any CR/LF characters
         return value.replace("\r", "").replace("\n", "");
     }
 }

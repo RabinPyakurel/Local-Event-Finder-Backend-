@@ -1,0 +1,804 @@
+================================================================================
+      LOCAL EVENT FINDER - INTEGRATION & SYSTEM TEST CASES
+================================================================================
+
+================================================================================
+PART 1: MOCK INTEGRATION TEST CASES
+================================================================================
+
+These test cases verify integration between components using mocked dependencies.
+
+--------------------------------------------------------------------------------
+1. AUTHENTICATION INTEGRATION TESTS
+--------------------------------------------------------------------------------
+
+IT-AUTH-001: Register User Integration
+---------------------------------------
+Description: Test complete registration flow from controller to database
+Mock: EmailUtil (skip actual email sending)
+Steps:
+  1. POST /api/auth/register with valid user data
+  2. Verify UserRepository.save() called
+  3. Verify RoleRepository finds USER role
+  4. Verify JWT token generated
+  5. Verify password encrypted (not stored plain)
+Expected: User persisted with encrypted password, correct role assigned
+
+IT-AUTH-002: Login with JWT Generation
+--------------------------------------
+Description: Test login generates valid JWT with correct claims
+Mock: None (use real JwtService)
+Steps:
+  1. Create test user in database
+  2. POST /api/auth/login with credentials
+  3. Decode returned JWT token
+  4. Verify claims contain userId, email, roles
+  5. Verify expiration time is correct
+Expected: Valid JWT with all required claims
+
+IT-AUTH-003: Logout Token Blacklist Integration
+-----------------------------------------------
+Description: Test logout adds token to blacklist and subsequent requests fail
+Mock: None
+Steps:
+  1. Login and get JWT token
+  2. Make authenticated request (should succeed)
+  3. POST /api/auth/logout with token
+  4. Make same authenticated request with same token
+Expected: Step 2 returns 200, Step 4 returns 401
+
+IT-AUTH-004: Admin Registration with Secret Key
+-----------------------------------------------
+Description: Test admin registration validates secret key from config
+Mock: EmailUtil
+Steps:
+  1. POST /api/auth/admin/register with WRONG secret key
+  2. Verify 400 error returned
+  3. POST /api/auth/admin/register with CORRECT secret key
+  4. Verify admin user created with ADMIN role
+Expected: Step 2 fails, Step 4 succeeds with ADMIN role
+
+IT-AUTH-005: Change Password with Encryption
+--------------------------------------------
+Description: Test password change encrypts new password
+Mock: None
+Steps:
+  1. Create user with known password
+  2. POST /api/auth/change-password
+  3. Fetch user from database
+  4. Verify new password is BCrypt encrypted
+  5. Verify old password no longer works for login
+Expected: New password encrypted, old password invalid
+
+
+--------------------------------------------------------------------------------
+2. EVENT MANAGEMENT INTEGRATION TESTS
+--------------------------------------------------------------------------------
+
+IT-EVT-001: Create Event with Tags Integration
+----------------------------------------------
+Description: Test event creation saves event and associated tags
+Mock: FileUtil (for image upload)
+Steps:
+  1. Create organizer user with ORGANIZER role
+  2. POST /api/events with tags ["MUSIC", "OUTDOOR"]
+  3. Verify Event saved in EventRepository
+  4. Verify EventTagMap entries created
+  5. Verify tags linked to correct EventTag entities
+Expected: Event and tag mappings persisted correctly
+
+IT-EVT-002: Event Search with Location Filter
+---------------------------------------------
+Description: Test Haversine distance calculation filters events
+Mock: None
+Setup: Create 3 events at different locations
+  - Event A: 2km away
+  - Event B: 8km away
+  - Event C: 15km away
+Steps:
+  1. GET /api/events/search?lat=27.7&lon=85.3&radius=10
+  2. Verify only Event A and B returned
+  3. GET /api/events/search?lat=27.7&lon=85.3&radius=5
+  4. Verify only Event A returned
+Expected: Distance filtering works correctly
+
+IT-EVT-003: Update Event Type Protection
+----------------------------------------
+Description: Test cannot change event type when enrollments exist
+Mock: None
+Setup: Create paid event with 2 enrollments
+Steps:
+  1. PUT /api/events/{id} with isPaid=false
+  2. Verify 400 error "Cannot change to free"
+  3. Cancel all enrollments
+  4. PUT /api/events/{id} with isPaid=false
+  5. Verify success
+Expected: Step 2 blocked, Step 5 succeeds
+
+IT-EVT-004: Cancel Event with Refund Processing
+-----------------------------------------------
+Description: Test event cancellation marks payments for refund
+Mock: EmailUtil
+Setup: Paid event with 3 paid enrollments
+Steps:
+  1. DELETE /api/events/{id}/cancel
+  2. Verify Event status = CANCELLED
+  3. Verify all EventEnrollment status = CANCELLED
+  4. Verify all Payment status = REFUNDED
+  5. Verify EmailUtil called 3 times (once per user)
+Expected: All related records updated, emails triggered
+
+IT-EVT-005: Recommendation Service Integration
+----------------------------------------------
+Description: Test recommendation scoring with interests and location
+Mock: None
+Setup:
+  - User with interests: MUSIC, SPORTS
+  - User location: 27.7, 85.3
+  - Event A: MUSIC tag, 5km away
+  - Event B: TECH tag, 2km away
+  - Event C: SPORTS tag, 50km away
+Steps:
+  1. GET /api/events/recommendations
+  2. Verify Event A ranked highest (matching interest + close)
+  3. Verify Event B ranked second (close but no interest match)
+  4. Verify Event C ranked lower (matching but far)
+Expected: Scoring combines interests and distance correctly
+
+
+--------------------------------------------------------------------------------
+3. ENROLLMENT & TICKET INTEGRATION TESTS
+--------------------------------------------------------------------------------
+
+IT-ENR-001: Free Event Enrollment Flow
+--------------------------------------
+Description: Test enrollment creates ticket and updates seat count
+Mock: None
+Setup: Free event with availableSeats=10, bookedSeats=0
+Steps:
+  1. POST /api/enrollments with eventId
+  2. Verify EventEnrollment created with ACTIVE status
+  3. Verify ticketCode generated (format: EVT-XXXXXX)
+  4. Verify Event.bookedSeats incremented to 1
+  5. Verify enrolledAt timestamp set
+Expected: Complete enrollment record created
+
+IT-ENR-002: Multiple Tickets Booking
+------------------------------------
+Description: Test booking multiple tickets creates multiple enrollments
+Mock: None
+Setup: Event with maxTicketsPerUser=10
+Steps:
+  1. POST /api/enrollments with numberOfTickets=3
+  2. Verify 3 EventEnrollment records created
+  3. Verify each has unique ticketCode
+  4. Verify Event.bookedSeats incremented by 3
+Expected: 3 separate tickets with unique codes
+
+IT-ENR-003: Max Tickets Per User Enforcement
+--------------------------------------------
+Description: Test user cannot exceed max tickets limit
+Mock: None
+Setup: Event with maxTicketsPerUser=5
+Steps:
+  1. POST /api/enrollments with numberOfTickets=3 (success)
+  2. POST /api/enrollments with numberOfTickets=3 (should fail)
+  3. Verify error message indicates limit
+  4. POST /api/enrollments with numberOfTickets=2 (success)
+Expected: Steps 1,4 succeed. Step 2 fails with clear message
+
+IT-ENR-004: Ticket Verification One-Time Use
+--------------------------------------------
+Description: Test ticket can only be verified once
+Mock: None
+Setup: Active ticket for an event
+Steps:
+  1. POST /api/tickets/verify/{ticketCode} as organizer
+  2. Verify valid=true, alreadyCheckedIn=false
+  3. Verify TicketStatus changed to USED
+  4. Verify checkedInAt timestamp set
+  5. POST /api/tickets/verify/{ticketCode} again
+  6. Verify valid=true, alreadyCheckedIn=true
+Expected: First scan checks in, second scan shows already used
+
+IT-ENR-005: Organizer Authorization for Ticket Scan
+---------------------------------------------------
+Description: Test only event organizer can verify tickets
+Mock: None
+Setup: Event by Organizer A, ticket exists
+Steps:
+  1. Login as Organizer A
+  2. POST /api/tickets/verify/{ticketCode} - should succeed
+  3. Login as Organizer B
+  4. POST /api/tickets/verify/{ticketCode} - should fail
+Expected: Step 2 succeeds, Step 4 returns "Not authorized"
+
+
+--------------------------------------------------------------------------------
+4. PAYMENT INTEGRATION TESTS
+--------------------------------------------------------------------------------
+
+IT-PAY-001: Khalti Payment Initiation
+-------------------------------------
+Description: Test Khalti payment creates pending payment record
+Mock: KhaltiPaymentService (mock API call, return test pidx)
+Setup: Paid event with price=500
+Steps:
+  1. POST /api/payments/initiate with KHALTI method
+  2. Verify Payment record created with PENDING status
+  3. Verify Payment.amount = event price
+  4. Verify Payment.paymentData contains pidx
+  5. Verify response contains payment_url
+Expected: Payment initiated, URL returned for redirect
+
+IT-PAY-002: Payment Verification with Auto-Enrollment
+-----------------------------------------------------
+Description: Test successful payment verification auto-enrolls user
+Mock: KhaltiPaymentService.verifyPayment (return true)
+Setup: Pending payment exists
+Steps:
+  1. GET /api/payments/khalti/verify?pidx=xxx
+  2. Verify Payment status = COMPLETED
+  3. Verify Payment.completedAt set
+  4. Verify EventEnrollment created
+  5. Verify Payment.enrollment linked
+  6. Verify Event.bookedSeats incremented
+Expected: Payment completed, user auto-enrolled
+
+IT-PAY-003: Failed Payment Handling
+-----------------------------------
+Description: Test failed payment does not create enrollment
+Mock: KhaltiPaymentService.verifyPayment (return false)
+Setup: Pending payment exists
+Steps:
+  1. GET /api/payments/khalti/verify?pidx=xxx
+  2. Verify Payment status = FAILED
+  3. Verify NO EventEnrollment created
+  4. Verify Event.bookedSeats unchanged
+Expected: Payment marked failed, no enrollment
+
+
+--------------------------------------------------------------------------------
+5. USER & SOCIAL INTEGRATION TESTS
+--------------------------------------------------------------------------------
+
+IT-USR-001: Follow User Updates Counts
+--------------------------------------
+Description: Test follow action updates follower/following counts
+Mock: None
+Setup: User A and User B exist
+Steps:
+  1. User A: POST /api/users/{B}/follow
+  2. GET /api/users/{B}/public
+  3. Verify followersCount = 1
+  4. GET /api/users/{A}/public
+  5. Verify followingCount = 1
+Expected: Counts updated on both profiles
+
+IT-USR-002: Event Interest Toggle
+---------------------------------
+Description: Test interest toggle adds/removes from favorites
+Mock: None
+Setup: Event exists, user logged in
+Steps:
+  1. POST /api/events/{id}/interest/toggle
+  2. Verify EventInterest record created
+  3. GET /api/events/{id}/interest/check - returns true
+  4. POST /api/events/{id}/interest/toggle
+  5. Verify EventInterest record deleted
+  6. GET /api/events/{id}/interest/check - returns false
+Expected: Toggle adds then removes
+
+IT-USR-003: Public Profile Aggregation
+--------------------------------------
+Description: Test public profile returns aggregated stats
+Mock: None
+Setup: User with 3 event attendances, 5 followers, 2 interested events
+Steps:
+  1. GET /api/users/{id}/public
+  2. Verify eventsAttended = 3
+  3. Verify followersCount = 5
+  4. Verify interestedEventsCount = 2
+Expected: All stats correctly aggregated
+
+
+--------------------------------------------------------------------------------
+6. ADMIN INTEGRATION TESTS
+--------------------------------------------------------------------------------
+
+IT-ADM-001: Role Assignment Integration
+---------------------------------------
+Description: Test admin can assign/remove roles
+Mock: None
+Setup: Regular USER exists
+Steps:
+  1. Login as ADMIN
+  2. POST /api/admin/users/{id}/assign-role?roleName=ORGANIZER
+  3. Verify user now has ORGANIZER role
+  4. User creates event - should succeed
+  5. POST /api/admin/users/{id}/remove-role?roleName=ORGANIZER
+  6. User creates event - should fail (403)
+Expected: Role changes affect user permissions immediately
+
+IT-ADM-002: Dashboard Stats Aggregation
+---------------------------------------
+Description: Test dashboard returns correct aggregated stats
+Mock: None
+Setup: 5 users, 10 events, 20 enrollments, 15 payments
+Steps:
+  1. GET /api/admin/dashboard/stats
+  2. Verify users.total = 5
+  3. Verify events.total = 10
+  4. Verify totalEnrollments = 20
+  5. Verify payments.total = 15
+Expected: All counts match database state
+
+IT-ADM-003: Comprehensive Analytics
+-----------------------------------
+Description: Test analytics includes revenue and top organizers
+Mock: None
+Setup: Multiple organizers with events and payments
+Steps:
+  1. GET /api/admin/analytics
+  2. Verify revenue.totalRevenue calculated correctly
+  3. Verify topOrganizers sorted by event count
+  4. Verify each organizer has correct eventCount and revenue
+Expected: Complex analytics computed correctly
+
+
+--------------------------------------------------------------------------------
+7. ROLE UPGRADE INTEGRATION TESTS
+--------------------------------------------------------------------------------
+
+IT-RUP-001: Request to Approval Flow
+------------------------------------
+Description: Test complete role upgrade workflow
+Mock: EmailUtil
+Steps:
+  1. User submits upgrade request
+  2. Verify RoleUpgradeRequest created with PENDING status
+  3. Verify admin notification email triggered
+  4. Admin approves request
+  5. Verify user now has ORGANIZER role
+  6. Verify user notification email triggered
+  7. Verify request status = APPROVED
+Expected: Complete flow works, notifications sent
+
+IT-RUP-002: User Activity Calculation
+-------------------------------------
+Description: Test activity report includes all metrics
+Mock: None
+Setup: User with events attended, groups joined, followers
+Steps:
+  1. GET /api/admin/role-upgrades/{id}/activity
+  2. Verify eventsAttended count correct
+  3. Verify groupsJoined count correct
+  4. Verify recentEnrollments list populated
+  5. Verify followersCount correct
+Expected: All activity metrics calculated
+
+
+================================================================================
+PART 2: SYSTEM (E2E) TEST CASES
+================================================================================
+
+These test cases verify complete user journeys through the entire system.
+
+--------------------------------------------------------------------------------
+1. USER REGISTRATION TO EVENT ATTENDANCE (FREE EVENT)
+--------------------------------------------------------------------------------
+
+SYS-001: New User Attends Free Event
+------------------------------------
+Actors: New User
+Preconditions: Free event exists and is active
+Test Flow:
+  1. User registers new account
+     - POST /api/auth/register
+     - Verify: 200 OK, account created
+
+  2. User logs in
+     - POST /api/auth/login
+     - Verify: JWT token received
+
+  3. User searches for nearby events
+     - GET /api/events/search?lat=27.7&lon=85.3&radius=10
+     - Verify: List of events returned
+
+  4. User enrolls in free event
+     - POST /api/enrollments
+     - Verify: Ticket issued with ticketCode
+
+  5. User views ticket
+     - GET /api/enrollments/ticket/{eventId}
+     - Verify: Ticket details returned
+
+  6. At event, organizer scans ticket
+     - POST /api/tickets/verify/{ticketCode}
+     - Verify: valid=true, check-in successful
+
+  7. Second scan attempt
+     - POST /api/tickets/verify/{ticketCode}
+     - Verify: alreadyCheckedIn=true
+
+Expected Final State:
+  - User account active
+  - 1 enrollment with USED status
+  - Event bookedSeats incremented
+
+
+--------------------------------------------------------------------------------
+2. PAID EVENT COMPLETE FLOW
+--------------------------------------------------------------------------------
+
+SYS-002: User Attends Paid Event via Khalti
+-------------------------------------------
+Actors: Registered User
+Preconditions: Paid event (Rs. 500) exists
+Test Flow:
+  1. User logs in
+     - POST /api/auth/login
+     - Verify: JWT received
+
+  2. User views paid event details
+     - GET /api/events/{id}
+     - Verify: isPaid=true, price=500
+
+  3. User initiates payment
+     - POST /api/payments/initiate {eventId, paymentMethod: KHALTI}
+     - Verify: payment_url returned
+
+  4. User completes payment (simulated)
+     - Khalti webhook/redirect triggers verification
+     - GET /api/payments/khalti/verify?pidx=xxx
+     - Verify: Redirect to success URL
+
+  5. User checks enrollment
+     - GET /api/enrollments/ticket/{eventId}
+     - Verify: Ticket exists (auto-enrolled)
+
+  6. User attends event
+     - Organizer: POST /api/tickets/verify/{ticketCode}
+     - Verify: Check-in successful
+
+Expected Final State:
+  - Payment COMPLETED
+  - Enrollment ACTIVE -> USED
+  - Event bookedSeats incremented
+
+
+--------------------------------------------------------------------------------
+3. ORGANIZER COMPLETE WORKFLOW
+--------------------------------------------------------------------------------
+
+SYS-003: Organizer Creates and Manages Event
+--------------------------------------------
+Actors: Organizer
+Preconditions: User has ORGANIZER role
+Test Flow:
+  1. Organizer logs in
+     - POST /api/auth/login
+     - Verify: roles include ORGANIZER
+
+  2. Creates paid event
+     - POST /api/events (multipart with image)
+     - Verify: Event created with isPaid=true
+
+  3. Adds event tags
+     - Verify: Tags saved in EventTagMap
+
+  4. Views own events
+     - GET /api/events/my-events
+     - Verify: New event in list
+
+  5. Users enroll (simulated: 5 users pay and enroll)
+
+  6. Organizer views enrollments
+     - GET /api/events/{id}/enrollments
+     - Verify: 5 enrollments listed
+
+  7. Event day - verifies tickets
+     - POST /api/tickets/verify/{code1} - success
+     - POST /api/tickets/verify/{code2} - success
+     - POST /api/tickets/verify/{code1} - already used
+
+  8. Views event analytics
+     - GET /api/events/{id}/stats (if exists) or check enrollment count
+     - Verify: Accurate attendance data
+
+Expected Final State:
+  - Event ACTIVE with 5 enrollments
+  - 2 tickets USED, 3 tickets ACTIVE
+
+
+--------------------------------------------------------------------------------
+4. USER TO ORGANIZER UPGRADE JOURNEY
+--------------------------------------------------------------------------------
+
+SYS-004: User Becomes Organizer
+-------------------------------
+Actors: Regular User, Admin
+Preconditions: User has attended multiple events
+Test Flow:
+  1. User attends 3 events (creates engagement history)
+     - Enroll and attend 3 free events
+
+  2. User follows 2 organizers
+     - POST /api/users/{org1}/follow
+     - POST /api/users/{org2}/follow
+
+  3. User submits upgrade request
+     - POST /api/role-upgrade/request {reason: "Want to organize tech meetups"}
+     - Verify: Request created, status=PENDING
+
+  4. Admin receives notification (mock email)
+
+  5. Admin reviews user activity
+     - GET /api/admin/role-upgrades/{id}/activity
+     - Verify: eventsAttended=3, followingCount=2
+
+  6. Admin approves request
+     - POST /api/admin/role-upgrades/{id}/approve
+     - Verify: status=APPROVED
+
+  7. User receives approval notification (mock email)
+
+  8. User now creates event
+     - POST /api/events
+     - Verify: Success (previously would fail)
+
+Expected Final State:
+  - User has ORGANIZER role
+  - RoleUpgradeRequest APPROVED
+  - User can create events
+
+
+--------------------------------------------------------------------------------
+5. EVENT CANCELLATION WITH REFUNDS
+--------------------------------------------------------------------------------
+
+SYS-005: Organizer Cancels Paid Event
+-------------------------------------
+Actors: Organizer, 3 Paid Users, Admin
+Preconditions: Paid event with 3 paying attendees
+Test Flow:
+  1. Setup: 3 users pay and enroll in event
+     - Verify: 3 payments COMPLETED, 3 enrollments ACTIVE
+
+  2. Organizer cancels event
+     - DELETE /api/events/{id}/cancel
+     - Verify: Event status=CANCELLED
+
+  3. System processes cancellation
+     - Verify: All 3 enrollments status=CANCELLED
+     - Verify: All 3 payments status=REFUNDED
+     - Verify: 3 cancellation emails sent (mock)
+
+  4. Admin views pending refunds
+     - GET /api/admin/refunds/pending
+     - Verify: 3 refunds listed
+
+  5. Admin processes refunds
+     - POST /api/admin/refunds/{id1}/process
+     - POST /api/admin/refunds/{id2}/process
+     - POST /api/admin/refunds/{id3}/process
+     - Verify: refundProcessed=true for all
+
+  6. Users receive refund confirmation (mock emails)
+
+Expected Final State:
+  - Event CANCELLED
+  - All enrollments CANCELLED
+  - All payments REFUNDED, refundProcessed=true
+
+
+--------------------------------------------------------------------------------
+6. CONCURRENT BOOKING RACE CONDITION
+--------------------------------------------------------------------------------
+
+SYS-006: Last Seat Booking
+--------------------------
+Actors: User A, User B
+Preconditions: Event with availableSeats=1, bookedSeats=0
+Test Flow:
+  1. User A and User B both view event
+     - Both see 1 seat available
+
+  2. Simultaneous booking attempt
+     - User A: POST /api/enrollments (Thread 1)
+     - User B: POST /api/enrollments (Thread 2)
+
+  3. Verify outcome
+     - Exactly one user succeeds
+     - Other user gets "Fully booked" error
+     - Event.bookedSeats = 1 (not 2)
+     - Only 1 enrollment exists
+
+Expected Final State:
+  - Exactly 1 enrollment
+  - No overbooking occurred
+  - Database consistency maintained
+
+
+--------------------------------------------------------------------------------
+7. AUTHENTICATION SECURITY FLOW
+--------------------------------------------------------------------------------
+
+SYS-007: Token Lifecycle Security
+---------------------------------
+Actors: User
+Test Flow:
+  1. User registers
+     - POST /api/auth/register
+     - Verify: Account created
+
+  2. User logs in
+     - POST /api/auth/login
+     - Store: Token A
+
+  3. User accesses protected resource
+     - GET /api/users/profile with Token A
+     - Verify: 200 OK
+
+  4. User logs out
+     - POST /api/auth/logout with Token A
+     - Verify: "Logged out successfully"
+
+  5. Attempt to use invalidated token
+     - GET /api/users/profile with Token A
+     - Verify: 401 Unauthorized
+
+  6. User logs in again
+     - POST /api/auth/login
+     - Store: Token B
+
+  7. New token works
+     - GET /api/users/profile with Token B
+     - Verify: 200 OK
+
+Expected Final State:
+  - Token A blacklisted and invalid
+  - Token B valid and working
+
+
+--------------------------------------------------------------------------------
+8. MULTI-TICKET BOOKING FLOW
+--------------------------------------------------------------------------------
+
+SYS-008: Group Ticket Booking
+-----------------------------
+Actors: User booking for friends
+Preconditions: Event with maxTicketsPerUser=10, availableSeats=50
+Test Flow:
+  1. User books 3 tickets
+     - POST /api/enrollments {eventId, numberOfTickets: 3}
+     - Verify: 3 tickets returned with unique codes
+
+  2. User views all tickets
+     - GET /api/enrollments/ticket/{eventId}
+     - Verify: List of 3 tickets
+
+  3. User books 5 more
+     - POST /api/enrollments {eventId, numberOfTickets: 5}
+     - Verify: 5 more tickets (total 8)
+
+  4. User tries to book 5 more (exceeds limit)
+     - POST /api/enrollments {eventId, numberOfTickets: 5}
+     - Verify: Error "Can only book 2 more"
+
+  5. At event, all 8 tickets verified
+     - Each ticket verified individually
+     - All show valid, then used
+
+Expected Final State:
+  - User has 8 enrollments
+  - Event.bookedSeats = 8
+  - All tickets eventually USED
+
+
+--------------------------------------------------------------------------------
+9. RECOMMENDATION PERSONALIZATION
+--------------------------------------------------------------------------------
+
+SYS-009: Personalized Event Discovery
+-------------------------------------
+Actors: User with specific interests
+Preconditions: Multiple events with different tags and locations
+Setup:
+  - Event A: MUSIC, 3km away, by followed organizer
+  - Event B: TECH, 2km away
+  - Event C: MUSIC, 80km away
+  - Event D: SPORTS, 5km away
+
+Test Flow:
+  1. User registers with interests [MUSIC, SPORTS]
+
+  2. User follows Event A's organizer
+
+  3. User gets recommendations
+     - GET /api/events/recommendations?lat=27.7&lon=85.3
+
+  4. Verify ranking:
+     - Event A ranked highest (interest match + close + social)
+     - Event D ranked second (interest match + close)
+     - Event B lower (close but no interest)
+     - Event C lowest (interest but far)
+
+Expected: Recommendations ordered by composite score
+
+
+--------------------------------------------------------------------------------
+10. ADMIN MODERATION WORKFLOW
+--------------------------------------------------------------------------------
+
+SYS-010: Handle Reported Content
+--------------------------------
+Actors: Reporter User, Admin, Event Organizer
+Preconditions: Event exists, Reporter is enrolled
+Test Flow:
+  1. User reports event
+     - POST /api/reports {eventId, reason: "Misleading description"}
+     - Verify: Report created, status=PENDING
+
+  2. Admin views pending reports
+     - GET /api/admin/reports/pending
+     - Verify: Report listed
+
+  3. Admin investigates
+     - GET /api/admin/events/{id}
+     - Reviews event details
+
+  4. Admin decides to remove event
+     - POST /api/admin/events/{id}/remove
+     - Verify: Event status=INACTIVE
+
+  5. Admin resolves report
+     - PUT /api/admin/reports/{id}/resolve
+     - Verify: Report status=RESOLVED
+
+  6. Event no longer visible in searches
+     - GET /api/events/search
+     - Verify: Removed event not in results
+
+Expected Final State:
+  - Event INACTIVE
+  - Report RESOLVED
+  - Event hidden from public
+
+
+================================================================================
+TEST DATA REQUIREMENTS
+================================================================================
+
+Users:
+  - 1 Admin user
+  - 2 Organizer users
+  - 5 Regular users
+
+Events:
+  - 3 Free events (various locations)
+  - 3 Paid events (various prices)
+  - 1 Fully booked event
+  - 1 Cancelled event
+
+Payments:
+  - Mix of COMPLETED, PENDING, FAILED, REFUNDED
+
+Enrollments:
+  - Various statuses (ACTIVE, USED, CANCELLED)
+
+
+================================================================================
+EXECUTION NOTES
+================================================================================
+
+1. Use @Transactional for database rollback after each test
+2. Mock external services: Khalti, eSewa, Email SMTP
+3. Use test containers for isolated PostgreSQL
+4. Run integration tests with: mvn test -Dtest=*IntegrationTest
+5. Run system tests with: mvn test -Dtest=*SystemTest
+6. Generate reports: mvn surefire-report:report
+
+================================================================================
+END OF TEST CASES DOCUMENT
+================================================================================

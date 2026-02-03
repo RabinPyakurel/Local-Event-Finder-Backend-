@@ -47,9 +47,13 @@ public class EventEnrollmentService {
     }
 
     @Transactional
-    public EventTicketResponseDto enroll(Long userId, Long eventId) {
+    public List<EventTicketResponseDto> enroll(Long userId, Long eventId, Integer numberOfTickets) {
 
-        log.debug("Ticket enrollment userId={} eventId={}", userId, eventId);
+        log.debug("Ticket enrollment userId={} eventId={} tickets={}", userId, eventId, numberOfTickets);
+
+        if (numberOfTickets == null || numberOfTickets < 1) {
+            numberOfTickets = 1;
+        }
 
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
@@ -62,42 +66,80 @@ public class EventEnrollmentService {
             throw new IllegalStateException("Organizer cannot enroll in own event");
         }
 
-        if (enrollmentRepository.existsByUser_IdAndEvent_Id(userId, eventId)) {
-            throw new IllegalStateException("Already enrolled");
+        // Check max tickets per user limit
+        long existingTickets = enrollmentRepository.countByUser_IdAndEvent_Id(userId, eventId);
+        int maxPerUser = event.getMaxTicketsPerUser() != null ? event.getMaxTicketsPerUser() : 10;
+
+        if (existingTickets + numberOfTickets > maxPerUser) {
+            long canBook = maxPerUser - existingTickets;
+            if (canBook <= 0) {
+                throw new IllegalStateException(
+                        String.format("You have reached the maximum limit of %d tickets for this event", maxPerUser));
+            }
+            throw new IllegalStateException(
+                    String.format("You can only book %d more ticket(s). Maximum %d per user.", canBook, maxPerUser));
+        }
+
+        // Check seat availability (null = unlimited)
+        if (event.getAvailableSeats() != null) {
+            int bookedSeats = event.getBookedSeats() != null ? event.getBookedSeats() : 0;
+            int remaining = event.getAvailableSeats() - bookedSeats;
+
+            if (remaining < numberOfTickets) {
+                if (remaining <= 0) {
+                    throw new IllegalStateException("This event is fully booked");
+                }
+                throw new IllegalStateException(
+                        String.format("Only %d seat(s) available. Cannot book %d tickets.", remaining, numberOfTickets));
+            }
         }
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        // For paid events, verify payment
-        Payment payment = null;
+        // For paid events, verify enough payments exist
+        List<Payment> availablePayments = new java.util.ArrayList<>();
         if (event.getIsPaid()) {
-            // Find completed payment for this user and event
-            payment = paymentRepository.findByUser(user).stream()
+            availablePayments = paymentRepository.findByUser(user).stream()
                     .filter(p -> p.getEvent().getId().equals(eventId))
                     .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
                     .filter(p -> p.getEnrollment() == null) // Not already used
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Payment required for this event. Please complete payment first."));
+                    .collect(Collectors.toList());
+
+            if (availablePayments.size() < numberOfTickets) {
+                throw new IllegalStateException(
+                        String.format("You have %d completed payment(s) but requested %d ticket(s). Please complete payment first.",
+                                availablePayments.size(), numberOfTickets));
+            }
         }
 
-        EventEnrollment enrollment = new EventEnrollment();
-        enrollment.setUser(user);
-        enrollment.setEvent(event);
-        enrollment.setTicketCode(TicketCodeGenerator.generate());
+        // Create enrollments
+        List<EventEnrollment> enrollments = new java.util.ArrayList<>();
+        for (int i = 0; i < numberOfTickets; i++) {
+            EventEnrollment enrollment = new EventEnrollment();
+            enrollment.setUser(user);
+            enrollment.setEvent(event);
+            enrollment.setTicketCode(TicketCodeGenerator.generate());
+            enrollments.add(enrollmentRepository.save(enrollment));
 
-        enrollmentRepository.save(enrollment);
-
-        // Link payment to enrollment if paid event
-        if (payment != null) {
-            payment.setEnrollment(enrollment);
-            paymentRepository.save(payment);
+            // Link payment to enrollment if paid event
+            if (event.getIsPaid() && i < availablePayments.size()) {
+                Payment payment = availablePayments.get(i);
+                payment.setEnrollment(enrollment);
+                paymentRepository.save(payment);
+            }
         }
 
-        log.info("Ticket issued {} for user {}", enrollment.getTicketCode(), userId);
+        // Update booked seats count
+        int currentBooked = event.getBookedSeats() != null ? event.getBookedSeats() : 0;
+        event.setBookedSeats(currentBooked + numberOfTickets);
+        eventRepository.save(event);
 
-        return buildTicketResponse(enrollment, event);
+        log.info("{} ticket(s) issued for user {} on event {}", numberOfTickets, userId, eventId);
+
+        return enrollments.stream()
+                .map(e -> buildTicketResponse(e, event))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -168,15 +210,20 @@ public class EventEnrollmentService {
     }
 
     /**
-     * Get user's ticket for a specific event
+     * Get all user's tickets for a specific event
      */
-    public EventTicketResponseDto getUserTicket(Long userId, Long eventId) {
-        log.debug("Getting ticket for userId={} eventId={}", userId, eventId);
+    public List<EventTicketResponseDto> getUserTickets(Long userId, Long eventId) {
+        log.debug("Getting tickets for userId={} eventId={}", userId, eventId);
 
-        EventEnrollment enrollment = enrollmentRepository.findByUser_IdAndEvent_Id(userId, eventId)
-                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found. You are not enrolled in this event."));
+        List<EventEnrollment> enrollments = enrollmentRepository.findByUser_IdAndEvent_Id(userId, eventId);
 
-        return buildTicketResponse(enrollment, enrollment.getEvent());
+        if (enrollments.isEmpty()) {
+            throw new ResourceNotFoundException("Enrollment not found. You are not enrolled in this event.");
+        }
+
+        return enrollments.stream()
+                .map(e -> buildTicketResponse(e, e.getEvent()))
+                .collect(Collectors.toList());
     }
 
     /**

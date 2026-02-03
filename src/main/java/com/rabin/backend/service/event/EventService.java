@@ -152,15 +152,22 @@ public class EventService {
 
         // Update paid event fields
         if (dto.getIsPaid() != null) {
+            long enrolledCount = enrollmentRepository.countByEvent_Id(eventId);
+
             // Prevent changing from FREE to PAID if users are already enrolled
-            if (dto.getIsPaid() && !event.getIsPaid()) {
-                long enrolledCount = enrollmentRepository.countByEvent_Id(eventId);
-                if (enrolledCount > 0) {
-                    throw new IllegalArgumentException(
-                            "Cannot change event to paid. " + enrolledCount + " users are already enrolled. " +
-                            "Please create a new paid event instead.");
-                }
+            if (dto.getIsPaid() && !event.getIsPaid() && enrolledCount > 0) {
+                throw new IllegalArgumentException(
+                        "Cannot change event to paid. " + enrolledCount + " users are already enrolled. " +
+                        "Please create a new paid event instead.");
             }
+
+            // When changing from PAID to FREE, automatically process refunds for all paid users
+            if (!dto.getIsPaid() && event.getIsPaid() && enrolledCount > 0) {
+                log.info("Event {} changing from PAID to FREE. Processing refunds for {} enrolled users.",
+                        eventId, enrolledCount);
+                processRefundsForEventTypeChange(event);
+            }
+
             event.setIsPaid(dto.getIsPaid());
         }
         if (dto.getPrice() != null) event.setPrice(dto.getPrice());
@@ -257,13 +264,25 @@ public class EventService {
         return mapToResponse(event);
     }
 
-    // Get events created by a specific organizer (ORGANIZER)
+    // Get events created by a specific organizer (ORGANIZER - includes all statuses)
     public List<EventResponseDto> getOrganizerEvents(Long organizerId) {
         // Ensure organizer exists
         userRepository.findById(organizerId)
                 .orElseThrow(() -> new IllegalArgumentException("Organizer not found"));
 
         return eventRepository.findByCreatedBy_Id(organizerId)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    // Get public active events by organizer (PUBLIC - only ACTIVE events)
+    public List<EventResponseDto> getOrganizerPublicEvents(Long organizerId) {
+        // Ensure organizer exists
+        userRepository.findById(organizerId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        return eventRepository.findByCreatedBy_IdAndEventStatus(organizerId, EventStatus.ACTIVE)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -408,6 +427,75 @@ public class EventService {
     }
     public boolean isEventOrganizer(Long eventId, Long userId) {
         return eventRepository.existsByIdAndCreatedBy_Id(eventId,userId);
+    }
+
+    /**
+     * Process refunds for all paid enrollments when event type changes from PAID to FREE
+     */
+    private void processRefundsForEventTypeChange(Event event) {
+        List<EventEnrollment> enrollments = enrollmentRepository.findByEvent_Id(event.getId());
+        int refundCount = 0;
+
+        for (EventEnrollment enrollment : enrollments) {
+            // Only process refunds for active tickets with completed payments
+            if (enrollment.getTicketStatus() == TicketStatus.ACTIVE) {
+                Payment payment = paymentRepository.findByEnrollment(enrollment).orElse(null);
+
+                if (payment != null && payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
+                    // Mark payment as refunded
+                    payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                    paymentRepository.save(payment);
+                    refundCount++;
+
+                    log.info("Refund processed for enrollment {}. Amount: {}",
+                            enrollment.getId(), payment.getAmount());
+
+                    // Send refund notification email
+                    sendEventTypeChangeRefundEmail(enrollment, event, payment.getAmount());
+                }
+            }
+        }
+
+        log.info("Event {} type change: {} refunds processed out of {} enrollments",
+                event.getId(), refundCount, enrollments.size());
+    }
+
+    /**
+     * Send email notification about refund due to event type change
+     */
+    @Async
+    private void sendEventTypeChangeRefundEmail(EventEnrollment enrollment, Event event, Double refundAmount) {
+        try {
+            String subject = "Refund Processed - " + event.getTitle() + " is now FREE!";
+            String body = String.format(
+                    "Dear %s,\n\n" +
+                    "Great news! The event \"%s\" that you enrolled in has been changed to a FREE event.\n\n" +
+                    "As a result, your payment of Rs. %.2f has been processed for refund.\n\n" +
+                    "Your ticket remains valid and you are still enrolled for the event.\n\n" +
+                    "Event Details:\n" +
+                    "- Event: %s\n" +
+                    "- Venue: %s\n" +
+                    "- Date: %s\n" +
+                    "- Ticket Code: %s\n\n" +
+                    "The refund will be credited to your original payment method within 5-7 business days.\n\n" +
+                    "Thank you for your support!\n\n" +
+                    "Best regards,\n" +
+                    "Local Event Finder Team",
+                    enrollment.getUser().getFullName(),
+                    event.getTitle(),
+                    refundAmount,
+                    event.getTitle(),
+                    event.getVenue(),
+                    event.getStartDate().toLocalDate().toString(),
+                    enrollment.getTicketCode()
+            );
+
+            emailUtil.sendEmail(enrollment.getUser().getEmail(), subject, body);
+            log.debug("Refund notification email sent to {}", enrollment.getUser().getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send refund notification email to user {}: {}",
+                    enrollment.getUser().getId(), e.getMessage());
+        }
     }
 
     private EventResponseDto mapToResponse(Event event) {

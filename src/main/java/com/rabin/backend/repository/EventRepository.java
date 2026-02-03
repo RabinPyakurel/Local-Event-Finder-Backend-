@@ -25,4 +25,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     // Count events by organizer (for public profile stats)
     long countByCreatedBy_Id(Long organizerId);
+
+    // Get organizer's events filtered by status (for public profile)
+    List<Event> findByCreatedBy_IdAndEventStatus(Long organizerId, EventStatus status);
 }

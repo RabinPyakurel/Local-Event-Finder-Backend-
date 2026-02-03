@@ -2,7 +2,6 @@ package com.rabin.backend.service.payment;
 
 import com.rabin.backend.dto.request.PaymentInitiateDto;
 import com.rabin.backend.dto.response.EsewaPaymentFormDto;
-import com.rabin.backend.dto.response.EventTicketResponseDto;
 import com.rabin.backend.dto.response.KhaltiInitiateResponseDto;
 import com.rabin.backend.enums.PaymentMethod;
 import com.rabin.backend.enums.PaymentStatus;
@@ -15,7 +14,6 @@ import com.rabin.backend.repository.EventEnrollmentRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.UserRepository;
-import com.rabin.backend.util.QRCodeGenerator;
 import com.rabin.backend.util.SecurityUtil;
 import com.rabin.backend.util.TicketCodeGenerator;
 import lombok.RequiredArgsConstructor;
@@ -159,10 +157,10 @@ public class PaymentService {
         User user = payment.getUser();
         Event event = payment.getEvent();
 
-        // Check if already enrolled
+        // Check if already enrolled (return first existing ticket)
         if (enrollmentRepository.existsByUser_IdAndEvent_Id(user.getId(), event.getId())) {
             log.warn("User {} already enrolled in event {}", user.getId(), event.getId());
-            return enrollmentRepository.findByUser_IdAndEvent_Id(user.getId(), event.getId())
+            return enrollmentRepository.findFirstByUser_IdAndEvent_Id(user.getId(), event.getId())
                     .orElseThrow(() -> new RuntimeException("Enrollment not found"));
         }
 
