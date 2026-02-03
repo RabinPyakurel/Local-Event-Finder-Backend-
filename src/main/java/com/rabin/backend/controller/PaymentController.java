@@ -6,6 +6,9 @@ import com.rabin.backend.service.payment.PaymentService;
 import com.rabin.backend.util.RedirectUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -43,7 +46,26 @@ public class PaymentController {
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/initiate")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER')")
-    public ResponseEntity<?> initiatePayment(@RequestBody PaymentInitiateDto dto) {
+    public ResponseEntity<?> initiatePayment(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Payment initiation request",
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PaymentInitiateDto.class),
+                            examples = @ExampleObject(
+                                    name = "Khalti Payment",
+                                    value = """
+                                            {
+                                                "eventId": 1,
+                                                "paymentMethod": "KHALTI",
+                                                "returnUrl": "https://myapp.com/payment/callback"
+                                            }
+                                            """
+                            )
+                    )
+            )
+            @RequestBody PaymentInitiateDto dto) {
         try {
             Object response = paymentService.initiatePayment(dto);
             return ResponseEntity.ok(response);

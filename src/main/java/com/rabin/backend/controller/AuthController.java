@@ -47,6 +47,7 @@ public class AuthController {
     @PostMapping(value = "/register", consumes = {"multipart/form-data"})
     public ResponseEntity<GenericApiResponse<UserAuthResponseDto>> register(@ModelAttribute RegisterDto dto) {
         log.debug("Register endpoint called for email: {}", dto.getEmail());
+        authService.registerUser(dto);
         return ResponseEntity.ok(GenericApiResponse.ok(200, "User registered successfully", null));
     }
 
