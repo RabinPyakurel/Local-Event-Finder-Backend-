@@ -33,4 +33,7 @@ public interface EventEnrollmentRepository extends JpaRepository<EventEnrollment
 
     // Get first/any user ticket for event (for backward compatibility)
     Optional<EventEnrollment> findFirstByUser_IdAndEvent_Id(Long userId, Long eventId);
+
+    // Delete all enrollments for an event
+    void deleteByEvent_Id(Long eventId);
 }

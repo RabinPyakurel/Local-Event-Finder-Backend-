@@ -62,11 +62,13 @@ public class AdminService {
     private final EventEnrollmentRepository eventEnrollmentRepository;
     private final RoleRepository roleRepository;
     private final ModelMapper modelMapper;
+    private final com.rabin.backend.service.event.EventService eventService;
 
     public AdminService(UserRepository userRepository,
                         EventRepository eventRepository,
                         ReportRepository reportRepository,
-                        EventTagMapRepository eventTagMapRepository, GroupRepository groupRepository, GroupMembershipRepository groupMembershipRepository, PaymentRepository paymentRepository, EventEnrollmentRepository eventEnrollmentRepository, RoleRepository roleRepository, ModelMapper modelMapper) {
+                        EventTagMapRepository eventTagMapRepository, GroupRepository groupRepository, GroupMembershipRepository groupMembershipRepository, PaymentRepository paymentRepository, EventEnrollmentRepository eventEnrollmentRepository, RoleRepository roleRepository, ModelMapper modelMapper,
+                        com.rabin.backend.service.event.EventService eventService) {
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
         this.reportRepository = reportRepository;
@@ -77,6 +79,7 @@ public class AdminService {
         this.eventEnrollmentRepository = eventEnrollmentRepository;
         this.roleRepository = roleRepository;
         this.modelMapper = modelMapper;
+        this.eventService = eventService;
     }
 
     // ==================== USER MANAGEMENT ====================
@@ -189,7 +192,7 @@ public class AdminService {
             return GenericApiResponse.error(404,"Event not found");
         }
 
-        eventRepository.deleteById(eventId);
+        eventService.deleteEventById(eventId);
 
         log.info("Admin: Event {} deleted permanently", eventId);
         return GenericApiResponse.ok(200, "Event deleted permanently", null);

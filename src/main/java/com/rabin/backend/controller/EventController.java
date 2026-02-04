@@ -109,6 +109,26 @@ public class EventController {
         );
     }
 
+    @Operation(summary = "Permanently delete event", description = "Permanently delete an event and all related data (enrollments, payments, feedback, interests, reports). Only the event organizer or admin can delete.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event deleted permanently"),
+            @ApiResponse(responseCode = "403", description = "Not authorized to delete this event"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
+    @DeleteMapping("/permanent-delete/{eventId:\\d+}")
+    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    public ResponseEntity<GenericApiResponse<Void>> deleteEventPermanently(
+            @Parameter(description = "Event ID") @PathVariable Long eventId) {
+        Long userId = SecurityUtil.getCurrentUserId();
+        log.debug("Permanent delete event request for eventId: {} by userId: {}", eventId, userId);
+
+        eventService.deleteEvent(eventId, userId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Event deleted permanently", null)
+        );
+    }
+
     @Operation(summary = "Get all active events", description = "Retrieve all active events. Public endpoint.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Events fetched successfully")

@@ -23,4 +23,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     // Count pending refunds for dashboard
     long countByPaymentStatusAndRefundProcessed(PaymentStatus status, Boolean refundProcessed);
+
+    // Delete all payments for an event
+    void deleteByEvent_Id(Long eventId);
 }

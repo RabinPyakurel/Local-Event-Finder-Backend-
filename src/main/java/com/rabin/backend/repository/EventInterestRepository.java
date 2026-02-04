@@ -30,4 +30,7 @@ public interface EventInterestRepository extends JpaRepository<EventInterest, Lo
 
     // Delete by user and event
     void deleteByUser_IdAndEvent_Id(Long userId, Long eventId);
+
+    // Delete all interests for an event
+    void deleteByEvent_Id(Long eventId);
 }

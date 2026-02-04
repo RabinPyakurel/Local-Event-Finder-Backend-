@@ -14,4 +14,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     // Count methods for admin dashboard
     long countByReportStatus(ReportStatus status);
+
+    // Delete all reports for an event
+    void deleteByEvent_Id(Long eventId);
 }

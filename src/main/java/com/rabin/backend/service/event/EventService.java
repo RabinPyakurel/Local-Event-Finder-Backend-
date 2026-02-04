@@ -13,10 +13,14 @@ import com.rabin.backend.enums.TicketStatus;
 import com.rabin.backend.model.EventEnrollment;
 import com.rabin.backend.model.Payment;
 import com.rabin.backend.repository.EventEnrollmentRepository;
+import com.rabin.backend.repository.EventFeedbackRepository;
+import com.rabin.backend.repository.EventInterestRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagMapRepository;
 import com.rabin.backend.repository.EventTagRepository;
+import com.rabin.backend.repository.GroupEventMapRepository;
 import com.rabin.backend.repository.PaymentRepository;
+import com.rabin.backend.repository.ReportRepository;
 import com.rabin.backend.repository.UserRepository;
 import com.rabin.backend.util.EmailUtil;
 import com.rabin.backend.util.FileUtil;
@@ -40,6 +44,10 @@ public class EventService {
     private final EventTagMapRepository eventTagMapRepository;
     private final EventEnrollmentRepository enrollmentRepository;
     private final PaymentRepository paymentRepository;
+    private final EventFeedbackRepository feedbackRepository;
+    private final EventInterestRepository eventInterestRepository;
+    private final GroupEventMapRepository groupEventMapRepository;
+    private final ReportRepository reportRepository;
     private final EmailUtil emailUtil;
 
     public EventService(EventRepository eventRepository,
@@ -48,6 +56,10 @@ public class EventService {
                         EventTagMapRepository eventTagMapRepository,
                         EventEnrollmentRepository enrollmentRepository,
                         PaymentRepository paymentRepository,
+                        EventFeedbackRepository feedbackRepository,
+                        EventInterestRepository eventInterestRepository,
+                        GroupEventMapRepository groupEventMapRepository,
+                        ReportRepository reportRepository,
                         EmailUtil emailUtil) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
@@ -55,6 +67,10 @@ public class EventService {
         this.eventTagMapRepository = eventTagMapRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.paymentRepository = paymentRepository;
+        this.feedbackRepository = feedbackRepository;
+        this.eventInterestRepository = eventInterestRepository;
+        this.groupEventMapRepository = groupEventMapRepository;
+        this.reportRepository = reportRepository;
         this.emailUtil = emailUtil;
     }
 
@@ -440,6 +456,43 @@ public class EventService {
     }
     public boolean isEventOrganizer(Long eventId, Long userId) {
         return eventRepository.existsByIdAndCreatedBy_Id(eventId,userId);
+    }
+
+    @Transactional
+    public void deleteEvent(Long eventId, Long organizerId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Event not found"));
+
+        if (!event.getCreatedBy().getId().equals(organizerId)) {
+            throw new IllegalArgumentException("You are not authorized to delete this event");
+        }
+
+        deleteEventWithCleanup(event);
+        log.info("Event {} permanently deleted by organizer {}", eventId, organizerId);
+    }
+
+    @Transactional
+    public void deleteEventById(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Event not found"));
+
+        deleteEventWithCleanup(event);
+        log.info("Event {} permanently deleted by admin", eventId);
+    }
+
+    private void deleteEventWithCleanup(Event event) {
+        Long eventId = event.getId();
+
+        // Delete all related entities before deleting the event
+        paymentRepository.deleteByEvent_Id(eventId);
+        enrollmentRepository.deleteByEvent_Id(eventId);
+        feedbackRepository.deleteByEvent_Id(eventId);
+        eventInterestRepository.deleteByEvent_Id(eventId);
+        groupEventMapRepository.deleteByEvent(event);
+        reportRepository.deleteByEvent_Id(eventId);
+        eventTagMapRepository.deleteByEvent(event);
+
+        eventRepository.delete(event);
     }
 
     /**
