@@ -247,10 +247,18 @@ public class RecommendationService {
         dto.setVenue(event.getVenue());
         dto.setEventImageUrl(event.getEventImageUrl());
         dto.setStartDate(event.getStartDate());
+        dto.setEndDate(event.getEndDate());
         dto.setLatitude(event.getLatitude());
         dto.setLongitude(event.getLongitude());
         dto.setOrganizerName(event.getCreatedBy().getFullName());
+        dto.setOrganizerProfileImage(event.getCreatedBy().getProfileImageUrl());
+        dto.setOrganizerId(event.getCreatedBy().getId());
         dto.setEventStatus(event.getEventStatus().name());
+        dto.setIsPaid(event.getIsPaid());
+        dto.setPrice(event.getPrice());
+        dto.setAvailableSeats(event.getAvailableSeats());
+        dto.setBookedSeats(event.getBookedSeats());
+        dto.setInterestCount(eventInterestRepository.countByEvent_Id(event.getId()));
 
         List<EventTagMap> tagMaps = eventTagMapRepository.findByEvent(event);
         List<String> tags = tagMaps.stream()

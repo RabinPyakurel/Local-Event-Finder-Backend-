@@ -1,6 +1,7 @@
 package com.rabin.backend.service.event;
 
 import com.rabin.backend.dto.request.EventFeedbackRequestDto;
+import com.rabin.backend.enums.NotificationType;
 import com.rabin.backend.dto.response.EventFeedbackResponseDto;
 import com.rabin.backend.model.Event;
 import com.rabin.backend.model.EventFeedback;
@@ -9,6 +10,7 @@ import com.rabin.backend.repository.EventEnrollmentRepository;
 import com.rabin.backend.repository.EventFeedbackRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.service.NotificationService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,17 +26,20 @@ public class EventFeedbackService {
     private final EventEnrollmentRepository enrollmentRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     public EventFeedbackService(
             EventFeedbackRepository feedbackRepository,
             EventEnrollmentRepository enrollmentRepository,
             EventRepository eventRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            NotificationService notificationService
     ) {
         this.feedbackRepository = feedbackRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -69,6 +74,16 @@ public class EventFeedbackService {
         feedbackRepository.save(feedback);
 
         log.info("Feedback submitted userId={} eventId={}", userId, dto.getEventId());
+
+        // Notify event organizer
+        notificationService.sendNotification(
+                event.getCreatedBy().getId(),
+                NotificationType.EVENT_FEEDBACK,
+                "New Feedback",
+                user.getFullName() + " submitted feedback on your event '" + event.getTitle() + "' (Rating: " + dto.getRating() + "/5)",
+                event.getId(),
+                "EVENT"
+        );
 
         return mapToResponse(feedback, userId);
     }

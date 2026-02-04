@@ -16,7 +16,8 @@ public class FileUtil {
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("jpg", "jpeg", "png", "gif", "webp");
     private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
-        "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"
+        "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+        "image/pjpeg", "image/x-png"  // Legacy MIME types sent by some browsers
     );
 
     public static String saveFile(MultipartFile file, String folder) {
@@ -29,10 +30,14 @@ public class FileUtil {
             throw new IllegalArgumentException("File size exceeds maximum limit of 5MB");
         }
 
-        // Validate content type
+        // Validate content type - strip parameters (e.g., "image/jpeg; charset=utf-8" -> "image/jpeg")
         String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
-            throw new IllegalArgumentException("Invalid file type. Only images are allowed (JPG, PNG, GIF, WEBP)");
+        if (contentType != null && contentType.contains(";")) {
+            contentType = contentType.substring(0, contentType.indexOf(";")).trim();
+        }
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase().trim())) {
+            throw new IllegalArgumentException(
+                "Invalid file type: " + file.getContentType() + ". Only images are allowed (JPG, JPEG, PNG, GIF, WEBP)");
         }
 
         // Validate file extension

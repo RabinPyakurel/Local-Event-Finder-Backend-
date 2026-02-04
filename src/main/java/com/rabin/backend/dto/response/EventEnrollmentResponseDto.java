@@ -28,6 +28,12 @@ public class EventEnrollmentResponseDto {
     @Schema(description = "Event venue", example = "Kathmandu Convention Center")
     private String venue;
 
+    @Schema(description = "Event image URL", example = "/uploads/events/1234_event.jpg")
+    private String eventImageUrl;
+
+    @Schema(description = "Event status", example = "ACTIVE")
+    private String eventStatus;
+
     @Schema(description = "Enrolled user ID", example = "1")
     private Long userId;
 

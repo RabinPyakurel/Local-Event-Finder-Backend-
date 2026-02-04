@@ -1,6 +1,7 @@
 package com.rabin.backend.service;
 
 import com.rabin.backend.dto.response.UserFollowResponseDto;
+import com.rabin.backend.enums.NotificationType;
 import com.rabin.backend.enums.RoleName;
 import com.rabin.backend.model.User;
 import com.rabin.backend.model.UserFollow;
@@ -24,6 +25,7 @@ public class UserFollowService {
 
     private final UserFollowRepository userFollowRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     /**
      * Follow a user
@@ -64,6 +66,16 @@ public class UserFollowService {
 
         userFollowRepository.save(userFollow);
         log.info("User {} followed user {}", followerId, userToFollowId);
+
+        // Notify the followed user
+        notificationService.sendNotification(
+                userToFollowId,
+                NotificationType.USER_FOLLOW,
+                "New Follower",
+                follower.getFullName() + " started following you",
+                followerId,
+                "USER"
+        );
     }
 
     /**

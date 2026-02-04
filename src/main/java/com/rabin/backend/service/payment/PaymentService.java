@@ -3,6 +3,7 @@ package com.rabin.backend.service.payment;
 import com.rabin.backend.dto.request.PaymentInitiateDto;
 import com.rabin.backend.dto.response.EsewaPaymentFormDto;
 import com.rabin.backend.dto.response.KhaltiInitiateResponseDto;
+import com.rabin.backend.enums.NotificationType;
 import com.rabin.backend.enums.PaymentMethod;
 import com.rabin.backend.enums.PaymentStatus;
 import com.rabin.backend.enums.TicketStatus;
@@ -14,6 +15,7 @@ import com.rabin.backend.repository.EventEnrollmentRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.service.NotificationService;
 import com.rabin.backend.util.SecurityUtil;
 import com.rabin.backend.util.TicketCodeGenerator;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class PaymentService {
     private final KhaltiPaymentService khaltiPaymentService;
     private final EsewaPaymentService esewaPaymentService;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     /**
      * Initiate payment for an event
@@ -112,6 +115,16 @@ public class PaymentService {
 
             log.info("Payment verified and user auto-enrolled. PaymentId: {}, EnrollmentId: {}",
                     payment.getId(), enrollment.getId());
+
+            // Notify user of successful payment
+            notificationService.sendNotification(
+                    payment.getUser().getId(),
+                    NotificationType.PAYMENT_COMPLETED,
+                    "Payment Successful",
+                    "Your payment for event '" + payment.getEvent().getTitle() + "' has been completed successfully",
+                    payment.getEvent().getId(),
+                    "EVENT"
+            );
         } else {
             payment.setPaymentStatus(PaymentStatus.FAILED);
         }
@@ -143,6 +156,16 @@ public class PaymentService {
 
             log.info("Payment verified and user auto-enrolled. PaymentId: {}, EnrollmentId: {}",
                     payment.getId(), enrollment.getId());
+
+            // Notify user of successful payment
+            notificationService.sendNotification(
+                    payment.getUser().getId(),
+                    NotificationType.PAYMENT_COMPLETED,
+                    "Payment Successful",
+                    "Your payment for event '" + payment.getEvent().getTitle() + "' has been completed successfully",
+                    payment.getEvent().getId(),
+                    "EVENT"
+            );
         } else {
             payment.setPaymentStatus(PaymentStatus.FAILED);
         }

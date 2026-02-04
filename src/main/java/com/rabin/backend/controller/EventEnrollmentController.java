@@ -172,4 +172,42 @@ public class EventEnrollmentController {
                 GenericApiResponse.ok(200, "Tickets retrieved successfully", tickets)
         );
     }
+
+    @Operation(summary = "Get upcoming events", description = "Get all upcoming enrolled events for the current user (events that haven't ended yet)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Upcoming events retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/upcoming")
+    @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
+    public ResponseEntity<GenericApiResponse<List<EventEnrollmentResponseDto>>> getUpcomingEnrollments() {
+        Long userId = SecurityUtil.getCurrentUserId();
+        log.debug("Get upcoming enrollments for userId: {}", userId);
+
+        List<EventEnrollmentResponseDto> enrollments = enrollmentService.getUpcomingEnrollments(userId);
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Upcoming events retrieved successfully", enrollments)
+        );
+    }
+
+    @Operation(summary = "Get attended event history", description = "Get all past events the current user attended (events that have already ended)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Event history retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/history")
+    @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
+    public ResponseEntity<GenericApiResponse<List<EventEnrollmentResponseDto>>> getAttendedEventHistory() {
+        Long userId = SecurityUtil.getCurrentUserId();
+        log.debug("Get attended event history for userId: {}", userId);
+
+        List<EventEnrollmentResponseDto> enrollments = enrollmentService.getAttendedEventHistory(userId);
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Event history retrieved successfully", enrollments)
+        );
+    }
 }

@@ -4,6 +4,7 @@ import com.rabin.backend.dto.request.CreateEventDto;
 import com.rabin.backend.dto.response.EventResponseDto;
 import com.rabin.backend.enums.EventStatus;
 import com.rabin.backend.enums.InterestCategory;
+import com.rabin.backend.enums.NotificationType;
 import com.rabin.backend.model.Event;
 import com.rabin.backend.model.EventTag;
 import com.rabin.backend.model.EventTagMap;
@@ -22,6 +23,7 @@ import com.rabin.backend.repository.GroupEventMapRepository;
 import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.ReportRepository;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.service.NotificationService;
 import com.rabin.backend.util.EmailUtil;
 import com.rabin.backend.util.FileUtil;
 import com.rabin.backend.util.Haversine;
@@ -49,6 +51,7 @@ public class EventService {
     private final GroupEventMapRepository groupEventMapRepository;
     private final ReportRepository reportRepository;
     private final EmailUtil emailUtil;
+    private final NotificationService notificationService;
 
     public EventService(EventRepository eventRepository,
                         UserRepository userRepository,
@@ -60,7 +63,8 @@ public class EventService {
                         EventInterestRepository eventInterestRepository,
                         GroupEventMapRepository groupEventMapRepository,
                         ReportRepository reportRepository,
-                        EmailUtil emailUtil) {
+                        EmailUtil emailUtil,
+                        NotificationService notificationService) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.eventTagRepository = eventTagRepository;
@@ -72,6 +76,7 @@ public class EventService {
         this.groupEventMapRepository = groupEventMapRepository;
         this.reportRepository = reportRepository;
         this.emailUtil = emailUtil;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -210,6 +215,19 @@ public class EventService {
         Event updated = eventRepository.save(event);
         log.info("Event updated: {}", eventId);
 
+        // Notify all enrolled users about event update
+        List<EventEnrollment> enrollments = enrollmentRepository.findByEvent_Id(eventId);
+        for (EventEnrollment enrollment : enrollments) {
+            notificationService.sendNotification(
+                    enrollment.getUser().getId(),
+                    NotificationType.EVENT_UPDATED,
+                    "Event Updated",
+                    "The event '" + event.getTitle() + "' has been updated by the organizer",
+                    event.getId(),
+                    "EVENT"
+            );
+        }
+
         return mapToResponse(updated);
     }
 
@@ -257,6 +275,16 @@ public class EventService {
                 log.error("Failed to send cancellation email to user {}: {}",
                         enrollment.getUser().getId(), e.getMessage());
             }
+
+            // Send in-app notification
+            notificationService.sendNotification(
+                    enrollment.getUser().getId(),
+                    NotificationType.EVENT_CANCELLED,
+                    "Event Cancelled",
+                    "The event '" + event.getTitle() + "' has been cancelled by the organizer",
+                    event.getId(),
+                    "EVENT"
+            );
         }
 
         // Update event status

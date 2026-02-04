@@ -3,6 +3,7 @@ package com.rabin.backend.service.event;
 import com.rabin.backend.dto.response.EventEnrollmentResponseDto;
 import com.rabin.backend.dto.response.EventTicketResponseDto;
 import com.rabin.backend.enums.EventStatus;
+import com.rabin.backend.enums.NotificationType;
 import com.rabin.backend.enums.PaymentStatus;
 import com.rabin.backend.exception.ResourceNotFoundException;
 import com.rabin.backend.model.Event;
@@ -13,12 +14,14 @@ import com.rabin.backend.repository.EventEnrollmentRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.service.NotificationService;
 import com.rabin.backend.util.TicketCodeGenerator;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -31,19 +34,22 @@ public class EventEnrollmentService {
     private final UserRepository userRepository;
     private final PaymentRepository paymentRepository;
     private final ModelMapper modelMapper;
+    private final NotificationService notificationService;
 
     public EventEnrollmentService(
             EventEnrollmentRepository enrollmentRepository,
             EventRepository eventRepository,
             UserRepository userRepository,
             PaymentRepository paymentRepository,
-            ModelMapper modelMapper
+            ModelMapper modelMapper,
+            NotificationService notificationService
     ) {
         this.enrollmentRepository = enrollmentRepository;
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.paymentRepository = paymentRepository;
         this.modelMapper = modelMapper;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -137,6 +143,16 @@ public class EventEnrollmentService {
 
         log.info("{} ticket(s) issued for user {} on event {}", numberOfTickets, userId, eventId);
 
+        // Notify event organizer
+        notificationService.sendNotification(
+                event.getCreatedBy().getId(),
+                NotificationType.EVENT_ENROLLMENT,
+                "New Enrollment",
+                user.getFullName() + " enrolled in your event '" + event.getTitle() + "' (" + numberOfTickets + " ticket(s))",
+                event.getId(),
+                "EVENT"
+        );
+
         return enrollments.stream()
                 .map(e -> buildTicketResponse(e, event))
                 .collect(Collectors.toList());
@@ -198,8 +214,34 @@ public class EventEnrollmentService {
             throw new IllegalStateException("Cannot cancel enrollment for completed or cancelled events");
         }
 
+        // Mark linked payment as REFUNDED for paid events
+        if (event.getIsPaid()) {
+            paymentRepository.findByEnrollment(enrollment).ifPresent(payment -> {
+                payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                payment.setEnrollment(null);
+                paymentRepository.save(payment);
+                log.info("Payment {} marked as REFUNDED for enrollment {}", payment.getId(), enrollmentId);
+            });
+        }
+
+        // Decrement booked seats
+        if (event.getBookedSeats() != null && event.getBookedSeats() > 0) {
+            event.setBookedSeats(event.getBookedSeats() - 1);
+            eventRepository.save(event);
+        }
+
         enrollmentRepository.delete(enrollment);
         log.info("Enrollment {} cancelled successfully", enrollmentId);
+
+        // Notify event organizer
+        notificationService.sendNotification(
+                event.getCreatedBy().getId(),
+                NotificationType.EVENT_CANCELLATION,
+                "Enrollment Cancelled",
+                enrollment.getUser().getFullName() + " cancelled enrollment in your event '" + event.getTitle() + "'",
+                event.getId(),
+                "EVENT"
+        );
     }
 
     /**
@@ -254,6 +296,37 @@ public class EventEnrollmentService {
     }
 
     /**
+     * Get upcoming enrolled events for a user (events that haven't ended yet)
+     */
+    public List<EventEnrollmentResponseDto> getUpcomingEnrollments(Long userId) {
+        log.debug("Getting upcoming enrollments for userId: {}", userId);
+
+        LocalDateTime now = LocalDateTime.now();
+        List<EventEnrollment> enrollments = enrollmentRepository.findByUser_Id(userId);
+
+        return enrollments.stream()
+                .filter(e -> e.getEvent().getEndDate() != null && e.getEvent().getEndDate().isAfter(now))
+                .filter(e -> e.getEvent().getEventStatus() == EventStatus.ACTIVE)
+                .map(this::convertToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get attended event history for a user (events that have already ended)
+     */
+    public List<EventEnrollmentResponseDto> getAttendedEventHistory(Long userId) {
+        log.debug("Getting attended event history for userId: {}", userId);
+
+        LocalDateTime now = LocalDateTime.now();
+        List<EventEnrollment> enrollments = enrollmentRepository.findByUser_Id(userId);
+
+        return enrollments.stream()
+                .filter(e -> e.getEvent().getEndDate() != null && e.getEvent().getEndDate().isBefore(now))
+                .map(this::convertToResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Convert EventEnrollment to EventEnrollmentResponseDto
      */
     private EventEnrollmentResponseDto convertToResponseDto(EventEnrollment enrollment) {
@@ -261,7 +334,10 @@ public class EventEnrollmentService {
         dto.setEventId(enrollment.getEvent().getId());
         dto.setEventTitle(enrollment.getEvent().getTitle());
         dto.setStartDate(enrollment.getEvent().getStartDate());
+        dto.setEndDate(enrollment.getEvent().getEndDate());
         dto.setVenue(enrollment.getEvent().getVenue());
+        dto.setEventImageUrl(enrollment.getEvent().getEventImageUrl());
+        dto.setEventStatus(enrollment.getEvent().getEventStatus().name());
         dto.setUserId(enrollment.getUser().getId());
         dto.setUserFullName(enrollment.getUser().getFullName());
         dto.setUserEmail(enrollment.getUser().getEmail());
