@@ -137,7 +137,7 @@ public class AuthService {
             throw new InvalidCredentialsException("Invalid email or password");
         }
         if(user.getUserStatus()== UserStatus.SUSPENDED){
-            throw new InvalidCredentialsException("User has been suspended");
+            throw new InvalidCredentialsException("User has been suspended please contact customer support");
         }
 
         // Block admin users from using regular login endpoint
@@ -145,7 +145,7 @@ public class AuthService {
                 .anyMatch(role -> role.getName() == RoleName.ADMIN);
         if (isAdmin) {
             log.warn("Admin login attempt blocked on regular endpoint: {}", dto.getEmail());
-            throw new InvalidCredentialsException("Admin accounts must use the admin login endpoint");
+            throw new InvalidCredentialsException("Invalid email or password");
         }
 
         log.info("User logged in successfully: {}", user.getId());
