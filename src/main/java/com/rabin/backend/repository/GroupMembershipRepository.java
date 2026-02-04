@@ -32,4 +32,7 @@ public interface GroupMembershipRepository extends JpaRepository<GroupMembership
     long countByUserAndStatus(User user, MembershipStatus status);
 
     List<GroupMembership> findByGroup(Group group);
+
+    // Delete all memberships for a group
+    void deleteByGroup(Group group);
 }

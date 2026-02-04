@@ -151,6 +151,28 @@ public class GroupService {
     }
 
     /**
+     * Delete a group (hard delete)
+     * Only the group creator can delete the group
+     */
+    @Transactional
+    public void deleteGroup(Long groupId, Long userId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Group not found"));
+
+        if (!group.getCreatedBy().getId().equals(userId)) {
+            throw new RuntimeException("Only the group creator can delete the group");
+        }
+
+        // Clean up related entities before deleting the group
+        membershipRepository.deleteByGroup(group);
+        eventMapRepository.deleteByGroup(group);
+        tagMapRepository.deleteByGroup(group);
+
+        groupRepository.delete(group);
+        log.info("Group {} deleted by creator {}", groupId, userId);
+    }
+
+    /**
      * Join a group
      */
     @Transactional

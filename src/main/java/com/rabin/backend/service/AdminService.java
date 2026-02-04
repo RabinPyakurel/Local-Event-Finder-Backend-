@@ -29,8 +29,10 @@ import com.rabin.backend.model.User;
 import com.rabin.backend.repository.EventEnrollmentRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagMapRepository;
+import com.rabin.backend.repository.GroupEventMapRepository;
 import com.rabin.backend.repository.GroupMembershipRepository;
 import com.rabin.backend.repository.GroupRepository;
+import com.rabin.backend.repository.GroupTagMapRepository;
 import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.ReportRepository;
 import com.rabin.backend.repository.RoleRepository;
@@ -62,6 +64,8 @@ public class AdminService {
     private final EventTagMapRepository eventTagMapRepository;
     private final GroupRepository groupRepository;
     private final GroupMembershipRepository groupMembershipRepository;
+    private final GroupEventMapRepository groupEventMapRepository;
+    private final GroupTagMapRepository groupTagMapRepository;
     private final PaymentRepository paymentRepository;
     private final EventEnrollmentRepository eventEnrollmentRepository;
     private final RoleRepository roleRepository;
@@ -73,7 +77,11 @@ public class AdminService {
     public AdminService(UserRepository userRepository,
                         EventRepository eventRepository,
                         ReportRepository reportRepository,
-                        EventTagMapRepository eventTagMapRepository, GroupRepository groupRepository, GroupMembershipRepository groupMembershipRepository, PaymentRepository paymentRepository, EventEnrollmentRepository eventEnrollmentRepository, RoleRepository roleRepository, ModelMapper modelMapper,
+                        EventTagMapRepository eventTagMapRepository, GroupRepository groupRepository,
+                        GroupMembershipRepository groupMembershipRepository,
+                        GroupEventMapRepository groupEventMapRepository,
+                        GroupTagMapRepository groupTagMapRepository,
+                        PaymentRepository paymentRepository, EventEnrollmentRepository eventEnrollmentRepository, RoleRepository roleRepository, ModelMapper modelMapper,
                         com.rabin.backend.service.event.EventService eventService,
                         NotificationService notificationService,
                         com.rabin.backend.util.EmailUtil emailUtil) {
@@ -83,6 +91,8 @@ public class AdminService {
         this.eventTagMapRepository = eventTagMapRepository;
         this.groupRepository = groupRepository;
         this.groupMembershipRepository = groupMembershipRepository;
+        this.groupEventMapRepository = groupEventMapRepository;
+        this.groupTagMapRepository = groupTagMapRepository;
         this.paymentRepository = paymentRepository;
         this.eventEnrollmentRepository = eventEnrollmentRepository;
         this.roleRepository = roleRepository;
@@ -484,11 +494,17 @@ public class AdminService {
     public GenericApiResponse<Void> deleteGroup(Long groupId) {
         log.debug("Admin: Deleting group: {}", groupId);
 
-        if (!groupRepository.existsById(groupId)) {
+        Group group = groupRepository.findById(groupId).orElse(null);
+        if (group == null) {
             return GenericApiResponse.error(404, "Group not found");
         }
 
-        groupRepository.deleteById(groupId);
+        // Clean up related entities before deleting
+        groupMembershipRepository.deleteByGroup(group);
+        groupEventMapRepository.deleteByGroup(group);
+        groupTagMapRepository.deleteByGroup(group);
+
+        groupRepository.delete(group);
 
         log.info("Admin: Group {} deleted successfully", groupId);
         return GenericApiResponse.ok(200, "Group deleted successfully", null);

@@ -76,6 +76,25 @@ public class GroupController {
         );
     }
 
+    @Operation(summary = "Delete a group", description = "Permanently delete a group. Only the group creator can delete the group. This removes all memberships, event mappings, and tags.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Group deleted successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Only group creator can delete the group"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @DeleteMapping("/{groupId}")
+    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    public ResponseEntity<GenericApiResponse<Void>> deleteGroup(
+            @Parameter(description = "Group ID") @PathVariable Long groupId
+    ) {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        groupService.deleteGroup(groupId, currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Group deleted successfully", null)
+        );
+    }
+
     @Operation(summary = "Get group details", description = "Get details of a specific group")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Group details retrieved"),

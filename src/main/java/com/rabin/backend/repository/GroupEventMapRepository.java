@@ -29,4 +29,7 @@ public interface GroupEventMapRepository extends JpaRepository<GroupEventMap, Lo
 
     // Delete all group mappings for an event
     void deleteByEvent(Event event);
+
+    // Delete all event mappings for a group
+    void deleteByGroup(Group group);
 }
