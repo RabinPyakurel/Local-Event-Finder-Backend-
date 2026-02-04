@@ -12,8 +12,11 @@ import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagMapRepository;
 import com.rabin.backend.repository.UserInterestRepository;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.security.CustomUserDetails;
 import com.rabin.backend.util.Haversine;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -239,6 +242,18 @@ public class RecommendationService {
 
     // Helper methods
 
+    private Long getCurrentUserIdOrNull() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()
+                    && authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
+                return userDetails.getId();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     private EventResponseDto mapToResponse(Event event) {
         EventResponseDto dto = new EventResponseDto();
         dto.setId(event.getId());
@@ -265,6 +280,9 @@ public class RecommendationService {
                 .map(tm -> tm.getEventTag().getTagKey())
                 .collect(Collectors.toList());
         dto.setTags(tags);
+
+        Long currentUserId = getCurrentUserIdOrNull();
+        dto.setIsEventOwner(currentUserId != null && currentUserId.equals(event.getCreatedBy().getId()));
 
         return dto;
     }

@@ -11,6 +11,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -51,8 +52,8 @@ public class EsewaPaymentService {
         formDto.setProductServiceCharge("0.00");
         formDto.setProductDeliveryCharge("0.00");
 
-        // Set callback URLs
-        String successUrl = baseUrl + "/api/payments/esewa/verify?transaction_uuid=" + transactionUuid;
+        // Set callback URLs - no query params on success URL since eSewa appends ?data=base64...
+        String successUrl = baseUrl + "/api/payments/esewa/verify";
         String failureUrl = returnUrl + "?status=failed&transaction_uuid=" + transactionUuid;
 
         formDto.setSuccessUrl(successUrl);
@@ -94,12 +95,25 @@ public class EsewaPaymentService {
     }
 
     /**
-     * Verify eSewa payment signature
+     * Verify eSewa payment signature using signed_field_names from the response
      */
-    public boolean verifyPayment(String transactionUuid, String totalAmount, String productCode, String signature) {
-        String message = String.format("transaction_uuid=%s,product_code=%s,total_amount=%s,status=COMPLETE",
-                transactionUuid, productCode, totalAmount);
-        String expectedSignature = generateHmacSHA256Signature(message);
+    public boolean verifyPayment(Map<String, String> esewaResponse) {
+        String signedFieldNames = esewaResponse.get("signed_field_names");
+        String signature = esewaResponse.get("signature");
+
+        if (signedFieldNames == null || signature == null) {
+            return false;
+        }
+
+        // Build message from signed_field_names in the exact order specified
+        StringBuilder message = new StringBuilder();
+        String[] fields = signedFieldNames.split(",");
+        for (int i = 0; i < fields.length; i++) {
+            if (i > 0) message.append(",");
+            message.append(fields[i]).append("=").append(esewaResponse.getOrDefault(fields[i], ""));
+        }
+
+        String expectedSignature = generateHmacSHA256Signature(message.toString());
         return expectedSignature.equals(signature);
     }
 }

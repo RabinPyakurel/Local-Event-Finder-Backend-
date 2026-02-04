@@ -21,7 +21,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -172,25 +176,38 @@ public class PaymentController {
         log.info("Received parameters: {}", allParams);
 
         try {
-            // Clean parameters
-            allParams.forEach((key, value) -> {
-                if (value != null && (value.contains("\n") || value.contains("\r"))) {
-                    String cleaned = value.replace("\n", "").replace("\r", "");
-                    allParams.put(key, cleaned);
-                }
-            });
+            // eSewa sends response as Base64-encoded JSON in the 'data' parameter
+            String dataParam = allParams.get("data");
+            Map<String, String> esewaParams;
 
-            String transactionUuid = allParams.get("transaction_uuid");
-            String totalAmount = allParams.get("total_amount");
-            String productCode = allParams.get("product_code");
-            String signature = allParams.get("signature");
+            if (dataParam != null && !dataParam.isEmpty()) {
+                // Decode Base64 and parse JSON
+                String decodedJson = new String(Base64.getDecoder().decode(dataParam), StandardCharsets.UTF_8);
+                log.info("Decoded eSewa data: {}", decodedJson);
 
-            if (transactionUuid == null || totalAmount == null || productCode == null || signature == null) {
-                throw new IllegalArgumentException("Missing required eSewa parameters");
+                ObjectMapper objectMapper = new ObjectMapper();
+                @SuppressWarnings("unchecked")
+                Map<String, Object> parsed = objectMapper.readValue(decodedJson, Map.class);
+                esewaParams = new HashMap<>();
+                parsed.forEach((key, value) -> esewaParams.put(key, String.valueOf(value)));
+            } else {
+                // Fallback: read individual query params directly
+                esewaParams = new HashMap<>(allParams);
+                esewaParams.forEach((key, value) -> {
+                    if (value != null && (value.contains("\n") || value.contains("\r"))) {
+                        esewaParams.put(key, value.replace("\n", "").replace("\r", ""));
+                    }
+                });
             }
 
-            Payment payment = paymentService.verifyEsewaPayment(
-                    transactionUuid, totalAmount, productCode, signature);
+            String transactionUuid = esewaParams.get("transaction_uuid");
+            String signature = esewaParams.get("signature");
+
+            if (transactionUuid == null || signature == null) {
+                throw new IllegalArgumentException("Missing required eSewa parameters (transaction_uuid, signature)");
+            }
+
+            Payment payment = paymentService.verifyEsewaPayment(esewaParams);
 
             String baseCallbackUrl = payment.getCallbackUrl() != null ?
                     payment.getCallbackUrl() : frontendUrl + "/payment/callback";

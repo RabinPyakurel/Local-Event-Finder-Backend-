@@ -34,8 +34,11 @@ import com.rabin.backend.repository.PaymentRepository;
 import com.rabin.backend.repository.ReportRepository;
 import com.rabin.backend.repository.RoleRepository;
 import com.rabin.backend.repository.UserRepository;
+import com.rabin.backend.security.CustomUserDetails;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -275,6 +278,18 @@ public class AdminService {
         return dto;
     }
 
+    private Long getCurrentUserIdOrNull() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()
+                    && authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
+                return userDetails.getId();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     private EventResponseDto mapToEventResponse(Event event) {
         EventResponseDto dto = new EventResponseDto();
         dto.setId(event.getId());
@@ -288,12 +303,17 @@ public class AdminService {
         dto.setLongitude(event.getLongitude());
         dto.setOrganizerName(event.getCreatedBy().getFullName());
         dto.setEventStatus(event.getEventStatus().name());
+        dto.setOrganizerId(event.getCreatedBy().getId());
+        dto.setOrganizerProfileImage(event.getCreatedBy().getProfileImageUrl());
 
         List<EventTagMap> tagMaps = eventTagMapRepository.findByEvent(event);
         List<String> tags = tagMaps.stream()
                 .map(tm -> tm.getEventTag().getTagKey())
                 .collect(Collectors.toList());
         dto.setTags(tags);
+
+        Long currentUserId = getCurrentUserIdOrNull();
+        dto.setIsEventOwner(currentUserId != null && currentUserId.equals(event.getCreatedBy().getId()));
 
         return dto;
     }
@@ -748,7 +768,7 @@ public class AdminService {
         double refundedAmount = paymentRepository.findAll().stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.REFUNDED)
                 .mapToDouble(Payment::getAmount).sum();
-        double netRevenue = totalRevenue - refundedAmount;
+        double netRevenue = Math.max(0, totalRevenue - refundedAmount);
 
         Map<String, Object> revenueStats = new HashMap<>();
         revenueStats.put("totalRevenue", totalRevenue);

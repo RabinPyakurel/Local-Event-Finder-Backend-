@@ -48,7 +48,7 @@ public class EventEnrollmentController {
     })
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAnyRole('USER', 'ORGANIZER')")
     public ResponseEntity<GenericApiResponse<List<EventTicketResponseDto>>> enroll(
             @RequestBody EventEnrollmentRequestDto dto
     ) {

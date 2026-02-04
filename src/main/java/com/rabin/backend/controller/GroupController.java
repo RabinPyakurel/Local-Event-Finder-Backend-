@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,16 +47,12 @@ public class GroupController {
     })
     @PostMapping
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> createGroup(@ModelAttribute GroupRequestDto dto) {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            GroupResponseDto group = groupService.createGroup(currentUserId, dto);
-            return ResponseEntity.ok(group);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+    public ResponseEntity<GenericApiResponse<GroupResponseDto>> createGroup(@ModelAttribute GroupRequestDto dto) {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        GroupResponseDto group = groupService.createGroup(currentUserId, dto);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Group created successfully", group)
+        );
     }
 
     @Operation(summary = "Update a group", description = "Update an existing group")
@@ -70,19 +65,15 @@ public class GroupController {
     })
     @PutMapping("/{groupId}")
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> updateGroup(
+    public ResponseEntity<GenericApiResponse<GroupResponseDto>> updateGroup(
             @Parameter(description = "Group ID") @PathVariable Long groupId,
             @ModelAttribute GroupRequestDto dto
     ) {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            GroupResponseDto group = groupService.updateGroup(groupId, currentUserId, dto);
-            return ResponseEntity.ok(group);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        GroupResponseDto group = groupService.updateGroup(groupId, currentUserId, dto);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Group updated successfully", group)
+        );
     }
 
     @Operation(summary = "Get group details", description = "Get details of a specific group")
@@ -93,18 +84,14 @@ public class GroupController {
     })
     @GetMapping("/{groupId}")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> getGroup(
+    public ResponseEntity<GenericApiResponse<GroupResponseDto>> getGroup(
             @Parameter(description = "Group ID") @PathVariable Long groupId
     ) {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            GroupResponseDto group = groupService.getGroup(groupId, currentUserId);
-            return ResponseEntity.ok(group);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        GroupResponseDto group = groupService.getGroup(groupId, currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Group details retrieved successfully", group)
+        );
     }
 
     @Operation(summary = "Get all groups", description = "Get all active groups")
@@ -114,16 +101,12 @@ public class GroupController {
     })
     @GetMapping
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> getAllGroups() {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            List<GroupResponseDto> groups = groupService.getAllGroups(currentUserId);
-            return ResponseEntity.ok(groups);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+    public ResponseEntity<GenericApiResponse<List<GroupResponseDto>>> getAllGroups() {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        List<GroupResponseDto> groups = groupService.getAllGroups(currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Groups retrieved successfully", groups)
+        );
     }
 
     @Operation(summary = "Get my groups", description = "Get groups the current user is a member of")
@@ -133,16 +116,12 @@ public class GroupController {
     })
     @GetMapping("/my-groups")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> getUserGroups() {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            List<GroupResponseDto> groups = groupService.getUserGroups(currentUserId);
-            return ResponseEntity.ok(groups);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+    public ResponseEntity<GenericApiResponse<List<GroupResponseDto>>> getUserGroups() {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        List<GroupResponseDto> groups = groupService.getUserGroups(currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "User groups retrieved successfully", groups)
+        );
     }
 
     @Operation(summary = "Join a group", description = "Join a group as a member")
@@ -154,18 +133,14 @@ public class GroupController {
     })
     @PostMapping("/{groupId}/join")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> joinGroup(
+    public ResponseEntity<GenericApiResponse<GroupMembershipResponseDto>> joinGroup(
             @Parameter(description = "Group ID") @PathVariable Long groupId
     ) {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            GroupMembershipResponseDto membership = groupService.joinGroup(groupId, currentUserId);
-            return ResponseEntity.ok(membership);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        GroupMembershipResponseDto membership = groupService.joinGroup(groupId, currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Successfully joined group", membership)
+        );
     }
 
     @Operation(summary = "Leave a group", description = "Leave a group")
@@ -177,21 +152,14 @@ public class GroupController {
     })
     @DeleteMapping("/{groupId}/leave")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> leaveGroup(
+    public ResponseEntity<GenericApiResponse<Void>> leaveGroup(
             @Parameter(description = "Group ID") @PathVariable Long groupId
     ) {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            groupService.leaveGroup(groupId, currentUserId);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Successfully left group");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        groupService.leaveGroup(groupId, currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Successfully left group", null)
+        );
     }
 
     @Operation(summary = "Get group members", description = "Get all members of a group")
@@ -202,16 +170,12 @@ public class GroupController {
     })
     @GetMapping("/{groupId}/members")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> getGroupMembers(
+    public ResponseEntity<GenericApiResponse<List<GroupMembershipResponseDto>>> getGroupMembers(
             @Parameter(description = "Group ID") @PathVariable Long groupId) {
-        try {
-            List<GroupMembershipResponseDto> members = groupService.getGroupMembers(groupId);
-            return ResponseEntity.ok(members);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        List<GroupMembershipResponseDto> members = groupService.getGroupMembers(groupId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Group members retrieved successfully", members)
+        );
     }
 
     @Operation(summary = "Add event to group", description = "Add an event to a group")
@@ -224,23 +188,16 @@ public class GroupController {
     })
     @PostMapping("/{groupId}/events/{eventId}")
     @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> addEventToGroup(
+    public ResponseEntity<GenericApiResponse<Void>> addEventToGroup(
             @Parameter(description = "Group ID") @PathVariable Long groupId,
             @Parameter(description = "Event ID") @PathVariable Long eventId,
             @Parameter(description = "Whether the event is private to group members") @RequestParam(required = false, defaultValue = "false") Boolean isPrivate
     ) {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            groupService.addEventToGroup(groupId, eventId, currentUserId, isPrivate);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Event added to group successfully");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        groupService.addEventToGroup(groupId, eventId, currentUserId, isPrivate);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Event added to group successfully", null)
+        );
     }
 
     @Operation(summary = "Invite all followers to group", description = "Send group invitation to all your followers. They will receive a notification and can accept or decline. Already active, banned, or pending members are skipped.")
@@ -308,17 +265,13 @@ public class GroupController {
     })
     @GetMapping("/{groupId}/events")
     @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
-    public ResponseEntity<?> getGroupEvents(
+    public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getGroupEvents(
             @Parameter(description = "Group ID") @PathVariable Long groupId
     ) {
-        try {
-            Long currentUserId = SecurityUtil.getCurrentUserId();
-            List<EventResponseDto> events = groupService.getGroupEvents(groupId, currentUserId);
-            return ResponseEntity.ok(events);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        List<EventResponseDto> events = groupService.getGroupEvents(groupId, currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Group events retrieved successfully", events)
+        );
     }
 }

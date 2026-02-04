@@ -30,7 +30,11 @@ import com.rabin.backend.util.Haversine;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+
+import com.rabin.backend.security.CustomUserDetails;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -244,18 +248,15 @@ public class EventService {
         List<EventEnrollment> enrollments = enrollmentRepository.findByEvent_Id(eventId);
         log.info("Cancelling event {} with {} enrollments", eventId, enrollments.size());
 
-        // Cancel all enrollments and process refunds/notifications
+        // Process refunds, send notifications, and revoke all enrollments
         for (EventEnrollment enrollment : enrollments) {
-            // Cancel the ticket
-            enrollment.setTicketStatus(TicketStatus.CANCELLED);
-            enrollmentRepository.save(enrollment);
-
             // For paid events, mark payment as REFUNDED
             Double refundAmount = null;
             if (event.getIsPaid()) {
                 Payment payment = paymentRepository.findByEnrollment(enrollment).orElse(null);
                 if (payment != null && payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
                     payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                    payment.setEnrollment(null);
                     paymentRepository.save(payment);
                     refundAmount = payment.getAmount();
                     log.info("Payment {} marked for refund, amount: {}", payment.getId(), refundAmount);
@@ -285,12 +286,16 @@ public class EventService {
                     event.getId(),
                     "EVENT"
             );
+
+            // Delete the enrollment record
+            enrollmentRepository.delete(enrollment);
         }
 
-        // Update event status
+        // Reset booked seats and update event status
+        event.setBookedSeats(0);
         event.setEventStatus(EventStatus.CANCELLED);
         eventRepository.save(event);
-        log.info("Event cancelled: {}, {} users notified", eventId, enrollments.size());
+        log.info("Event cancelled: {}, {} enrollments revoked", eventId, enrollments.size());
     }
 
     // Get all active events (PUBLIC)
@@ -525,8 +530,31 @@ public class EventService {
             throw new IllegalArgumentException("You are not authorized to delete this event");
         }
 
+        // Process refunds and send notifications before hard deleting
+        List<EventEnrollment> enrollments = enrollmentRepository.findByEvent_Id(eventId);
+        for (EventEnrollment enrollment : enrollments) {
+            if (event.getIsPaid()) {
+                Payment payment = paymentRepository.findByEnrollment(enrollment).orElse(null);
+                if (payment != null && payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
+                    payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                    payment.setEnrollment(null);
+                    paymentRepository.save(payment);
+                    log.info("Payment {} marked for refund before delete, amount: {}", payment.getId(), payment.getAmount());
+                }
+            }
+
+            notificationService.sendNotification(
+                    enrollment.getUser().getId(),
+                    NotificationType.EVENT_CANCELLED,
+                    "Event Deleted",
+                    "The event '" + event.getTitle() + "' has been deleted by the organizer",
+                    event.getId(),
+                    "EVENT"
+            );
+        }
+
         deleteEventWithCleanup(event);
-        log.info("Event {} permanently deleted by organizer {}", eventId, organizerId);
+        log.info("Event {} permanently deleted by organizer {}, {} enrollments revoked", eventId, organizerId, enrollments.size());
     }
 
     @Transactional
@@ -534,8 +562,31 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
 
+        // Process refunds and send notifications before hard deleting
+        List<EventEnrollment> enrollments = enrollmentRepository.findByEvent_Id(eventId);
+        for (EventEnrollment enrollment : enrollments) {
+            if (event.getIsPaid()) {
+                Payment payment = paymentRepository.findByEnrollment(enrollment).orElse(null);
+                if (payment != null && payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
+                    payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                    payment.setEnrollment(null);
+                    paymentRepository.save(payment);
+                    log.info("Payment {} marked for refund before admin delete, amount: {}", payment.getId(), payment.getAmount());
+                }
+            }
+
+            notificationService.sendNotification(
+                    enrollment.getUser().getId(),
+                    NotificationType.EVENT_CANCELLED,
+                    "Event Removed",
+                    "The event '" + event.getTitle() + "' has been removed by admin",
+                    event.getId(),
+                    "EVENT"
+            );
+        }
+
         deleteEventWithCleanup(event);
-        log.info("Event {} permanently deleted by admin", eventId);
+        log.info("Event {} permanently deleted by admin, {} enrollments revoked", eventId, enrollments.size());
     }
 
     private void deleteEventWithCleanup(Event event) {
@@ -622,6 +673,18 @@ public class EventService {
         }
     }
 
+    private Long getCurrentUserIdOrNull() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()
+                    && authentication.getPrincipal() instanceof CustomUserDetails userDetails) {
+                return userDetails.getId();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     private EventResponseDto mapToResponse(Event event) {
         EventResponseDto dto = new EventResponseDto();
         dto.setId(event.getId());
@@ -648,6 +711,10 @@ public class EventService {
         dto.setBookedSeats(event.getBookedSeats());
         dto.setOrganizerId(event.getCreatedBy().getId());
         dto.setOrganizerProfileImage(event.getCreatedBy().getProfileImageUrl());
+
+        Long currentUserId = getCurrentUserIdOrNull();
+        dto.setIsEventOwner(currentUserId != null && currentUserId.equals(event.getCreatedBy().getId()));
+
         return dto;
     }
 }

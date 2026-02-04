@@ -73,4 +73,7 @@ public class EventResponseDto {
 
     @Schema(description = "Whether current user is interested (for authenticated requests)", example = "true")
     private Boolean isInterested;
+
+    @Schema(description = "Whether current user is owner (for authenticated requests)", example = "true")
+    private Boolean isEventOwner;
 }

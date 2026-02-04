@@ -89,14 +89,14 @@ public class EventController {
         );
     }
 
-    @Operation(summary = "Cancel event", description = "Cancel an event. Enrolled users will be notified and refunded if applicable.")
+    @Operation(summary = "Cancel event", description = "Cancel an event (soft cancel). Event record is kept with CANCELLED status. Enrolled users will be notified and refunded if applicable.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Event cancelled successfully"),
             @ApiResponse(responseCode = "403", description = "Not authorized to cancel this event"),
             @ApiResponse(responseCode = "404", description = "Event not found")
     })
     @SecurityRequirement(name = "bearerAuth")
-    @DeleteMapping("/delete/{eventId:\\d+}")
+    @PostMapping("/cancel/{eventId:\\d+}")
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<GenericApiResponse<Void>> cancelEvent(
             @Parameter(description = "Event ID") @PathVariable Long eventId) {
@@ -109,23 +109,23 @@ public class EventController {
         );
     }
 
-    @Operation(summary = "Permanently delete event", description = "Permanently delete an event and all related data (enrollments, payments, feedback, interests, reports). Only the event organizer or admin can delete.")
+    @Operation(summary = "Delete event", description = "Permanently delete an event and all related data. Enrolled users will be notified and refunded if applicable. Only the event organizer can delete.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Event deleted permanently"),
+            @ApiResponse(responseCode = "200", description = "Event deleted successfully"),
             @ApiResponse(responseCode = "403", description = "Not authorized to delete this event"),
             @ApiResponse(responseCode = "404", description = "Event not found")
     })
     @SecurityRequirement(name = "bearerAuth")
-    @DeleteMapping("/permanent-delete/{eventId:\\d+}")
-    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
-    public ResponseEntity<GenericApiResponse<Void>> deleteEventPermanently(
+    @DeleteMapping("/delete/{eventId:\\d+}")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<GenericApiResponse<Void>> deleteEvent(
             @Parameter(description = "Event ID") @PathVariable Long eventId) {
-        Long userId = SecurityUtil.getCurrentUserId();
-        log.debug("Permanent delete event request for eventId: {} by userId: {}", eventId, userId);
+        Long organizerId = SecurityUtil.getCurrentUserId();
+        log.debug("Delete event request for eventId: {} by organizerId: {}", eventId, organizerId);
 
-        eventService.deleteEvent(eventId, userId);
+        eventService.deleteEvent(eventId, organizerId);
         return ResponseEntity.ok(
-                GenericApiResponse.ok(200, "Event deleted permanently", null)
+                GenericApiResponse.ok(200, "Event deleted successfully", null)
         );
     }
 

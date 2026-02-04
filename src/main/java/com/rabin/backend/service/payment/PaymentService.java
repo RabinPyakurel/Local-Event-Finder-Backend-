@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -136,15 +137,25 @@ public class PaymentService {
      * Verify eSewa payment and auto-enroll user
      */
     @Transactional
-    public Payment verifyEsewaPayment(String transactionUuid, String totalAmount,
-                                       String productCode, String signature) {
+    public Payment verifyEsewaPayment(Map<String, String> esewaParams) {
+        String transactionUuid = esewaParams.get("transaction_uuid");
+        String esewaStatus = esewaParams.get("status");
+
+        log.info("Verifying eSewa payment: transactionUuid={}, status={}", transactionUuid, esewaStatus);
+
         // Find payment by transaction ID
         Payment payment = paymentRepository.findByTransactionId(transactionUuid)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
 
-        // Verify signature
-        boolean verified = esewaPaymentService.verifyPayment(
-                transactionUuid, totalAmount, productCode, signature);
+        // Check eSewa status first
+        if (!"COMPLETE".equals(esewaStatus)) {
+            log.warn("eSewa payment not complete. Status: {}", esewaStatus);
+            payment.setPaymentStatus(PaymentStatus.FAILED);
+            return paymentRepository.save(payment);
+        }
+
+        // Verify signature using the full eSewa response
+        boolean verified = esewaPaymentService.verifyPayment(esewaParams);
 
         if (verified) {
             payment.setPaymentStatus(PaymentStatus.COMPLETED);

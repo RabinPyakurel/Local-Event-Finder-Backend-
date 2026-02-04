@@ -2,8 +2,6 @@ package com.rabin.backend.service;
 
 import com.rabin.backend.dto.GenericApiResponse;
 import com.rabin.backend.enums.EventStatus;
-import com.rabin.backend.enums.PaymentStatus;
-import com.rabin.backend.enums.ReportStatus;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagRepository;
 import com.rabin.backend.repository.UserRepository;
