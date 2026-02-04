@@ -5,6 +5,7 @@ import com.rabin.backend.dto.response.EventResponseDto;
 import com.rabin.backend.enums.InterestCategory;
 import com.rabin.backend.repository.EventTagRepository;
 import com.rabin.backend.repository.GroupRepository;
+import com.rabin.backend.service.PublicStatsService;
 import com.rabin.backend.service.event.EventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,6 +36,7 @@ public class PublicController {
     private final GroupRepository groupRepository;
     private final EventTagRepository eventTagRepository;
     private final EventService eventService;
+    private final PublicStatsService publicStatsService;
 
     @Operation(summary = "Get all interest categories", description = "Get all available interest categories for event tagging and user preferences")
     @ApiResponses(value = {
@@ -154,5 +156,12 @@ public class PublicController {
 
         return ResponseEntity.ok(GenericApiResponse.ok(200,
                 "Nearby events retrieved successfully", events));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<GenericApiResponse<Map<String, Object>>> getPublicStats() {
+        log.debug("Admin: Get dashboard statistics request");
+        GenericApiResponse<Map<String, Object>> response = publicStatsService.getPublicStats();
+        return ResponseEntity.ok(response);
     }
 }
