@@ -331,6 +331,7 @@ public class EventEnrollmentService {
      */
     private EventEnrollmentResponseDto convertToResponseDto(EventEnrollment enrollment) {
         EventEnrollmentResponseDto dto = modelMapper.map(enrollment, EventEnrollmentResponseDto.class);
+        dto.setEnrollmentId(enrollment.getId());
         dto.setEventId(enrollment.getEvent().getId());
         dto.setEventTitle(enrollment.getEvent().getTitle());
         dto.setStartDate(enrollment.getEvent().getStartDate());

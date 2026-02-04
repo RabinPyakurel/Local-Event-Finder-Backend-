@@ -10,6 +10,9 @@ import java.time.LocalDateTime;
 @Setter
 @Schema(description = "Event enrollment response")
 public class EventEnrollmentResponseDto {
+    @Schema(description = "Enrollment ID", example = "1")
+    private Long enrollmentId;
+
     @Schema(description = "Event ID", example = "1")
     private Long eventId;
 
