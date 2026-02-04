@@ -10,6 +10,7 @@ import com.rabin.backend.dto.response.PaymentResponseDto;
 import com.rabin.backend.dto.response.ReportResponseDto;
 import com.rabin.backend.enums.EventStatus;
 import com.rabin.backend.enums.MembershipStatus;
+import com.rabin.backend.enums.NotificationType;
 import com.rabin.backend.enums.PaymentStatus;
 import com.rabin.backend.enums.ReportStatus;
 import com.rabin.backend.enums.RoleName;
@@ -66,12 +67,14 @@ public class AdminService {
     private final RoleRepository roleRepository;
     private final ModelMapper modelMapper;
     private final com.rabin.backend.service.event.EventService eventService;
+    private final NotificationService notificationService;
 
     public AdminService(UserRepository userRepository,
                         EventRepository eventRepository,
                         ReportRepository reportRepository,
                         EventTagMapRepository eventTagMapRepository, GroupRepository groupRepository, GroupMembershipRepository groupMembershipRepository, PaymentRepository paymentRepository, EventEnrollmentRepository eventEnrollmentRepository, RoleRepository roleRepository, ModelMapper modelMapper,
-                        com.rabin.backend.service.event.EventService eventService) {
+                        com.rabin.backend.service.event.EventService eventService,
+                        NotificationService notificationService) {
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
         this.reportRepository = reportRepository;
@@ -83,6 +86,7 @@ public class AdminService {
         this.roleRepository = roleRepository;
         this.modelMapper = modelMapper;
         this.eventService = eventService;
+        this.notificationService = notificationService;
     }
 
     // ==================== USER MANAGEMENT ====================
@@ -237,6 +241,16 @@ public class AdminService {
         report.setReportStatus(ReportStatus.RESOLVED);
         reportRepository.save(report);
 
+        // Notify the reporter that their report was resolved
+        notificationService.sendNotification(
+                report.getReporter().getId(),
+                NotificationType.REPORT_RESOLVED,
+                "Report Resolved",
+                "Your report on event '" + report.getEvent().getTitle() + "' has been reviewed and action has been taken. Thank you for helping keep our community safe.",
+                report.getEvent().getId(),
+                "EVENT"
+        );
+
         log.info("Admin: Report {} resolved successfully", reportId);
         return GenericApiResponse.ok(200, "Report resolved successfully",
                 mapToReportResponse(report));
@@ -251,6 +265,16 @@ public class AdminService {
 
         report.setReportStatus(ReportStatus.REJECTED);
         reportRepository.save(report);
+
+        // Notify the reporter that their report was reviewed but no action taken
+        notificationService.sendNotification(
+                report.getReporter().getId(),
+                NotificationType.REPORT_RESOLVED,
+                "Report Reviewed",
+                "Your report on event '" + report.getEvent().getTitle() + "' has been reviewed. After investigation, no violation was found.",
+                report.getEvent().getId(),
+                "EVENT"
+        );
 
         log.info("Admin: Report {} rejected successfully", reportId);
         return GenericApiResponse.ok(200, "Report rejected successfully",

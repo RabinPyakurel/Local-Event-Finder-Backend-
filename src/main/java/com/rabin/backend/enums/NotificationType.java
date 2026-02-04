@@ -8,5 +8,6 @@ public enum NotificationType {
     EVENT_UPDATED,
     EVENT_CANCELLED,
     PAYMENT_COMPLETED,
-    GROUP_INVITE
+    GROUP_INVITE,
+    REPORT_RESOLVED
 }
