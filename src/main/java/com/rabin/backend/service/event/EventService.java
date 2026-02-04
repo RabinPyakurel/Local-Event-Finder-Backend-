@@ -401,6 +401,36 @@ public class EventService {
     }
 
 
+    /**
+     * Get upcoming events (starting in the future, sorted by soonest first)
+     */
+    public List<EventResponseDto> getUpcomingEvents() {
+        LocalDateTime now = LocalDateTime.now();
+        return eventRepository.findByEventStatus(EventStatus.ACTIVE).stream()
+                .filter(e -> e.getStartDate() != null && e.getStartDate().isAfter(now))
+                .sorted((a, b) -> a.getStartDate().compareTo(b.getStartDate()))
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get popular events (sorted by interest count + booked seats, descending)
+     */
+    public List<EventResponseDto> getPopularEvents() {
+        LocalDateTime now = LocalDateTime.now();
+        return eventRepository.findByEventStatus(EventStatus.ACTIVE).stream()
+                .filter(e -> e.getEndDate() == null || e.getEndDate().isAfter(now))
+                .sorted((a, b) -> {
+                    long scoreA = eventInterestRepository.countByEvent_Id(a.getId())
+                            + (a.getBookedSeats() != null ? a.getBookedSeats() : 0);
+                    long scoreB = eventInterestRepository.countByEvent_Id(b.getId())
+                            + (b.getBookedSeats() != null ? b.getBookedSeats() : 0);
+                    return Long.compare(scoreB, scoreA);
+                })
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     // --------------------- Helper Methods ---------------------
 
     private void validateBasicFields(CreateEventDto dto) {

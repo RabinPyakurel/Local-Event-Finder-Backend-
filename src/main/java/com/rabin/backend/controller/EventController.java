@@ -350,6 +350,32 @@ public class EventController {
         );
     }
 
+    @Operation(summary = "Get upcoming events", description = "Get active events starting in the future, sorted by soonest first. Public endpoint.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Upcoming events fetched successfully")
+    })
+    @GetMapping("/upcoming")
+    public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getUpcomingEvents() {
+        log.debug("Get upcoming events request");
+        List<EventResponseDto> events = eventService.getUpcomingEvents();
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Upcoming events fetched successfully", events)
+        );
+    }
+
+    @Operation(summary = "Get popular events", description = "Get active events sorted by popularity (interest count + booked seats). Public endpoint.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Popular events fetched successfully")
+    })
+    @GetMapping("/popular")
+    public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getPopularEvents() {
+        log.debug("Get popular events request");
+        List<EventResponseDto> events = eventService.getPopularEvents();
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Popular events fetched successfully", events)
+        );
+    }
+
     @Operation(summary = "Get paid events", description = "Get all active paid events. Public endpoint.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Paid events fetched successfully")
