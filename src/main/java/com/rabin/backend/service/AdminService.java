@@ -68,13 +68,15 @@ public class AdminService {
     private final ModelMapper modelMapper;
     private final com.rabin.backend.service.event.EventService eventService;
     private final NotificationService notificationService;
+    private final com.rabin.backend.util.EmailUtil emailUtil;
 
     public AdminService(UserRepository userRepository,
                         EventRepository eventRepository,
                         ReportRepository reportRepository,
                         EventTagMapRepository eventTagMapRepository, GroupRepository groupRepository, GroupMembershipRepository groupMembershipRepository, PaymentRepository paymentRepository, EventEnrollmentRepository eventEnrollmentRepository, RoleRepository roleRepository, ModelMapper modelMapper,
                         com.rabin.backend.service.event.EventService eventService,
-                        NotificationService notificationService) {
+                        NotificationService notificationService,
+                        com.rabin.backend.util.EmailUtil emailUtil) {
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
         this.reportRepository = reportRepository;
@@ -87,6 +89,7 @@ public class AdminService {
         this.modelMapper = modelMapper;
         this.eventService = eventService;
         this.notificationService = notificationService;
+        this.emailUtil = emailUtil;
     }
 
     // ==================== USER MANAGEMENT ====================
@@ -123,6 +126,28 @@ public class AdminService {
         user.setUserStatus(UserStatus.SUSPENDED);
         userRepository.save(user);
 
+        // Send suspension email
+        try {
+            emailUtil.sendEmail(
+                    user.getEmail(),
+                    "Account Suspended - Local Event Finder",
+                    String.format(
+                            "Dear %s,\n\n" +
+                            "Due to unusual activity detected from your account, your account has been suspended.\n\n" +
+                            "While your account is suspended, you will not be able to:\n" +
+                            "- Log in to the platform\n" +
+                            "- Access any features or services\n\n" +
+                            "If you believe this is a mistake or would like to raise an issue, " +
+                            "please reply to this email and our team will contact you to resolve the matter.\n\n" +
+                            "Best regards,\n" +
+                            "Local Event Finder Team",
+                            user.getFullName()
+                    )
+            );
+        } catch (Exception e) {
+            log.error("Failed to send suspension email to user {}: {}", userId, e.getMessage());
+        }
+
         log.info("Admin: User {} suspended successfully", userId);
         return GenericApiResponse.ok(200, "User suspended successfully",
                 mapToAdminUserResponse(user));
@@ -141,6 +166,25 @@ public class AdminService {
 
         user.setUserStatus(UserStatus.ACTIVE);
         userRepository.save(user);
+
+        // Send reactivation email
+        try {
+            emailUtil.sendEmail(
+                    user.getEmail(),
+                    "Account Reactivated - Local Event Finder",
+                    String.format(
+                            "Dear %s,\n\n" +
+                            "Good news! Your account has been reviewed and reactivated.\n\n" +
+                            "You can now log in and access all features of Local Event Finder as usual.\n\n" +
+                            "Thank you for your patience.\n\n" +
+                            "Best regards,\n" +
+                            "Local Event Finder Team",
+                            user.getFullName()
+                    )
+            );
+        } catch (Exception e) {
+            log.error("Failed to send reactivation email to user {}: {}", userId, e.getMessage());
+        }
 
         log.info("Admin: User {} activated successfully", userId);
         return GenericApiResponse.ok(200, "User activated successfully",
