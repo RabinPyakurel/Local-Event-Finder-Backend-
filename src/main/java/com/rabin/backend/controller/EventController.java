@@ -2,7 +2,9 @@ package com.rabin.backend.controller;
 
 import com.rabin.backend.dto.GenericApiResponse;
 import com.rabin.backend.dto.request.CreateEventDto;
+import com.rabin.backend.dto.request.ReportRequestDto;
 import com.rabin.backend.dto.response.EventResponseDto;
+import com.rabin.backend.dto.response.ReportResponseDto;
 import com.rabin.backend.service.RecommendationService;
 import com.rabin.backend.service.event.EventService;
 import com.rabin.backend.util.SecurityUtil;
@@ -17,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -403,6 +406,29 @@ public class EventController {
 
         return ResponseEntity.ok(
                 GenericApiResponse.ok(200, "Free events fetched successfully", events)
+        );
+    }
+
+    @Operation(summary = "Report an event", description = "Report an event for inappropriate content or violations. Each user can only have one pending report per event.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Report submitted successfully"),
+            @ApiResponse(responseCode = "400", description = "Already reported or cannot report own event"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/{eventId}/report")
+    @PreAuthorize("hasAnyRole('USER', 'ORGANIZER')")
+    public ResponseEntity<GenericApiResponse<ReportResponseDto>> reportEvent(
+            @Parameter(description = "Event ID") @PathVariable Long eventId,
+            @RequestBody ReportRequestDto dto
+    ) {
+        Long userId = SecurityUtil.getCurrentUserId();
+        log.debug("Report event request for eventId: {} by userId: {}", eventId, userId);
+
+        ReportResponseDto report = eventService.reportEvent(eventId, userId, dto.getReason());
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Report submitted successfully", report)
         );
     }
 }

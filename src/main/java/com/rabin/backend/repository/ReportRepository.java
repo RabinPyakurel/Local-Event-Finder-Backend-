@@ -11,6 +11,7 @@ import java.util.List;
 public interface ReportRepository extends JpaRepository<Report, Long> {
     List<Report> findByReportStatus(ReportStatus status);
     List<Report> findByEvent_Id(Long eventId);
+    boolean existsByReporter_IdAndEvent_IdAndReportStatus(Long reporterId, Long eventId, ReportStatus status);
 
     // Count methods for admin dashboard
     long countByReportStatus(ReportStatus status);

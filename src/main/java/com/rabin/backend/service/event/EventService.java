@@ -2,6 +2,9 @@ package com.rabin.backend.service.event;
 
 import com.rabin.backend.dto.request.CreateEventDto;
 import com.rabin.backend.dto.response.EventResponseDto;
+import com.rabin.backend.dto.response.ReportResponseDto;
+import com.rabin.backend.enums.ReportStatus;
+import com.rabin.backend.model.Report;
 import com.rabin.backend.enums.EventStatus;
 import com.rabin.backend.enums.InterestCategory;
 import com.rabin.backend.enums.NotificationType;
@@ -683,6 +686,47 @@ public class EventService {
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    /**
+     * Report an event
+     */
+    public ReportResponseDto reportEvent(Long eventId, Long userId, String reason) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Event not found"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Prevent duplicate pending reports from the same user
+        if (reportRepository.existsByReporter_IdAndEvent_IdAndReportStatus(userId, eventId, ReportStatus.PENDING)) {
+            throw new RuntimeException("You have already reported this event");
+        }
+
+        // Cannot report own event
+        if (event.getCreatedBy().getId().equals(userId)) {
+            throw new RuntimeException("You cannot report your own event");
+        }
+
+        Report report = new Report();
+        report.setReporter(user);
+        report.setEvent(event);
+        report.setReason(reason);
+        report.setReportStatus(ReportStatus.PENDING);
+        report = reportRepository.save(report);
+
+        ReportResponseDto dto = new ReportResponseDto();
+        dto.setId(report.getId());
+        dto.setReporterId(user.getId());
+        dto.setReporterName(user.getFullName());
+        dto.setReporterEmail(user.getEmail());
+        dto.setEventId(event.getId());
+        dto.setEventTitle(event.getTitle());
+        dto.setReason(report.getReason());
+        dto.setReportStatus(report.getReportStatus().name());
+        dto.setCreatedAt(report.getCreatedAt());
+
+        return dto;
     }
 
     private EventResponseDto mapToResponse(Event event) {
