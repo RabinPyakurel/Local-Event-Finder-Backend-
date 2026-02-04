@@ -137,7 +137,7 @@ public class EventController {
         );
     }
 
-    @Operation(summary = "Get personalized recommendations", description = "Get event recommendations based on user interests, location, and social connections.")
+    @Operation(summary = "Get personalized recommendations (hybrid)", description = "Get event recommendations based on user interests, location, and social connections. Uses a weighted hybrid algorithm.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Recommendations fetched successfully"),
             @ApiResponse(responseCode = "401", description = "Unauthorized")
@@ -159,6 +159,46 @@ public class EventController {
 
         return ResponseEntity.ok(
                 GenericApiResponse.ok(200, "Recommendations fetched successfully", recommendations)
+        );
+    }
+
+    @Operation(summary = "Get social recommendations", description = "Get event recommendations based purely on social connections - events that followed users have liked, attended, or created.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Social recommendations fetched successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/recommendations/social")
+    public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getSocialRecommendations(
+            @Parameter(description = "Maximum number of recommendations") @RequestParam(required = false, defaultValue = "10") Integer limit
+    ) {
+        Long userId = SecurityUtil.getCurrentUserId();
+        log.debug("Get social recommendations request for userId: {}, limit: {}", userId, limit);
+
+        List<EventResponseDto> recommendations = recommendationService.getSocialRecommendations(userId, limit);
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Social recommendations fetched successfully", recommendations)
+        );
+    }
+
+    @Operation(summary = "Get interest-based recommendations", description = "Get event recommendations based purely on user's interests/tags. Uses content similarity matching.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Interest-based recommendations fetched successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/recommendations/interests")
+    public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getInterestBasedRecommendations(
+            @Parameter(description = "Maximum number of recommendations") @RequestParam(required = false, defaultValue = "10") Integer limit
+    ) {
+        Long userId = SecurityUtil.getCurrentUserId();
+        log.debug("Get interest-based recommendations request for userId: {}, limit: {}", userId, limit);
+
+        List<EventResponseDto> recommendations = recommendationService.getInterestBasedRecommendations(userId, limit);
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Interest-based recommendations fetched successfully", recommendations)
         );
     }
 
@@ -195,7 +235,7 @@ public class EventController {
         );
     }
 
-    @Operation(summary = "Search events", description = "Search events with filters like location, tags, and search term. Public endpoint.")
+    @Operation(summary = "Search events", description = "Search events with filters like location, categories/tags, paid/free, and search term. Public endpoint. Categories: MUSIC_CONCERTS, ART_SHOWS, SPORTS, TECHNOLOGY, FOOD_DRINK, TRAVEL, EDUCATION, OUTDOORS, FITNESS, SPIRITUAL")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Events fetched successfully")
     })
@@ -204,13 +244,21 @@ public class EventController {
             @Parameter(description = "Latitude for location filter") @RequestParam(required = false) Double lat,
             @Parameter(description = "Longitude for location filter") @RequestParam(required = false) Double lon,
             @Parameter(description = "Search radius in km") @RequestParam(required = false) Double radius,
-            @Parameter(description = "Filter by tags (e.g., MUSIC_CONCERTS, TECH_MEETUPS)") @RequestParam(required = false) List<String> tags,
+            @Parameter(description = "Filter by tags (e.g., MUSIC_CONCERTS, TECHNOLOGY)") @RequestParam(required = false) List<String> tags,
+            @Parameter(description = "Filter by categories - same as tags (e.g., MUSIC_CONCERTS, SPORTS)") @RequestParam(required = false) List<String> categories,
+            @Parameter(description = "Filter by paid status: true = paid events only, false = free events only, null = all events") @RequestParam(required = false) Boolean isPaid,
             @Parameter(description = "Search query for title, description, or venue") @RequestParam(required = false) String q
     ) {
-        log.debug("Search events request - lat={}, lon={}, radius={}, tags={}, query={}",
-                lat, lon, radius, tags, q);
+        // Merge tags and categories into a single list
+        List<String> allTags = new java.util.ArrayList<>();
+        if (tags != null) allTags.addAll(tags);
+        if (categories != null) allTags.addAll(categories);
+        List<String> finalTags = allTags.isEmpty() ? null : allTags;
 
-        List<EventResponseDto> events = eventService.searchEvents(lat, lon, radius, tags, q);
+        log.debug("Search events request - lat={}, lon={}, radius={}, tags={}, categories={}, isPaid={}, query={}",
+                lat, lon, radius, tags, categories, isPaid, q);
+
+        List<EventResponseDto> events = eventService.searchEvents(lat, lon, radius, finalTags, q, isPaid);
 
         return ResponseEntity.ok(
                 GenericApiResponse.ok(200, "Events fetched successfully", events)
@@ -232,5 +280,83 @@ public class EventController {
         boolean isMyEvent = eventService.isEventOrganizer(eventId, usrId);
 
         return ResponseEntity.ok(GenericApiResponse.ok(200, "Ownership check successful", isMyEvent));
+    }
+
+    @Operation(summary = "Get all categories", description = "Get all available event categories. Public endpoint.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Categories fetched successfully")
+    })
+    @GetMapping("/categories")
+    public ResponseEntity<GenericApiResponse<List<java.util.Map<String, String>>>> getCategories() {
+        log.debug("Get all categories request");
+
+        List<java.util.Map<String, String>> categories = java.util.Arrays.stream(
+                        com.rabin.backend.enums.InterestCategory.values())
+                .map(cat -> java.util.Map.of(
+                        "key", cat.name(),
+                        "displayName", cat.getDisplayName()
+                ))
+                .toList();
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Categories fetched successfully", categories)
+        );
+    }
+
+    @Operation(summary = "Get events by category", description = "Get all active events filtered by a specific category. Public endpoint.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Events fetched successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid category")
+    })
+    @GetMapping("/category/{category}")
+    public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getEventsByCategory(
+            @Parameter(description = "Category key (e.g., MUSIC_CONCERTS, SPORTS, TECHNOLOGY)") @PathVariable String category
+    ) {
+        log.debug("Get events by category request - category={}", category);
+
+        // Validate category
+        try {
+            com.rabin.backend.enums.InterestCategory.valueOf(category.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(
+                    GenericApiResponse.error(400, "Invalid category: " + category)
+            );
+        }
+
+        List<EventResponseDto> events = eventService.searchEvents(null, null, null, List.of(category.toUpperCase()), null);
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Events fetched successfully", events)
+        );
+    }
+
+    @Operation(summary = "Get paid events", description = "Get all active paid events. Public endpoint.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Paid events fetched successfully")
+    })
+    @GetMapping("/paid")
+    public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getPaidEvents() {
+        log.debug("Get paid events request");
+
+        List<EventResponseDto> events = eventService.searchEvents(null, null, null, null, null, true);
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Paid events fetched successfully", events)
+        );
+    }
+
+    @Operation(summary = "Get free events", description = "Get all active free events. Public endpoint.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Free events fetched successfully")
+    })
+    @GetMapping("/free")
+    public ResponseEntity<GenericApiResponse<List<EventResponseDto>>> getFreeEvents() {
+        log.debug("Get free events request");
+
+        List<EventResponseDto> events = eventService.searchEvents(null, null, null, null, null, false);
+
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Free events fetched successfully", events)
+        );
     }
 }

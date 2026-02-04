@@ -304,9 +304,15 @@ public class EventService {
                 .collect(Collectors.toList());
     }
 
-    // Search events with filters (location, radius, tags, search term)
+    // Search events with filters (location, radius, tags, search term) - backward compatible
     public List<EventResponseDto> searchEvents(Double lat, Double lon, Double radiusKm,
                                                List<String> tags, String searchTerm) {
+        return searchEvents(lat, lon, radiusKm, tags, searchTerm, null);
+    }
+
+    // Search events with filters (location, radius, tags, search term, isPaid)
+    public List<EventResponseDto> searchEvents(Double lat, Double lon, Double radiusKm,
+                                               List<String> tags, String searchTerm, Boolean isPaid) {
         List<Event> events = eventRepository.findByEventStatus(EventStatus.ACTIVE);
 
         // Filter by location
@@ -317,7 +323,7 @@ public class EventService {
                     .toList();
         }
 
-        // Filter by tags
+        // Filter by tags/categories
         if (tags != null && !tags.isEmpty()) {
             events = events.stream()
                     .filter(e -> {
@@ -327,6 +333,13 @@ public class EventService {
                                 .toList();
                         return tags.stream().anyMatch(eventTags::contains);
                     })
+                    .toList();
+        }
+
+        // Filter by paid/free status
+        if (isPaid != null) {
+            events = events.stream()
+                    .filter(e -> e.getIsPaid().equals(isPaid))
                     .toList();
         }
 

@@ -6,6 +6,8 @@ import com.rabin.backend.model.Event;
 import com.rabin.backend.model.EventTagMap;
 import com.rabin.backend.model.User;
 import com.rabin.backend.model.UserInterest;
+import com.rabin.backend.model.EventInterest;
+import com.rabin.backend.repository.EventInterestRepository;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagMapRepository;
 import com.rabin.backend.repository.UserInterestRepository;
@@ -14,8 +16,10 @@ import com.rabin.backend.util.Haversine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,6 +33,7 @@ public class RecommendationService {
     private final EventTagMapRepository eventTagMapRepository;
     private final UserFollowService userFollowService;
     private final com.rabin.backend.repository.EventEnrollmentRepository eventEnrollmentRepository;
+    private final EventInterestRepository eventInterestRepository;
 
     // Weight constants for scoring algorithm
     private static final double ALPHA = 0.3;  // Weight for content similarity
@@ -41,13 +46,15 @@ public class RecommendationService {
                                   UserInterestRepository userInterestRepository,
                                   EventTagMapRepository eventTagMapRepository,
                                   UserFollowService userFollowService,
-                                  com.rabin.backend.repository.EventEnrollmentRepository eventEnrollmentRepository) {
+                                  com.rabin.backend.repository.EventEnrollmentRepository eventEnrollmentRepository,
+                                  EventInterestRepository eventInterestRepository) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.userInterestRepository = userInterestRepository;
         this.eventTagMapRepository = eventTagMapRepository;
         this.userFollowService = userFollowService;
         this.eventEnrollmentRepository = eventEnrollmentRepository;
+        this.eventInterestRepository = eventInterestRepository;
     }
 
     /**
@@ -258,6 +265,140 @@ public class RecommendationService {
         EventResponseDto dto = mapToResponse(event);
         dto.setFinalScore(score);
         return dto;
+    }
+
+    /**
+     * Get purely social-based recommendations
+     * Recommends events based on what followed users have:
+     * - Liked/shown interest in
+     * - Enrolled/attended
+     * - Created (organized by followed users)
+     */
+    public List<EventResponseDto> getSocialRecommendations(Long userId, Integer limit) {
+        log.debug("Getting social recommendations for user: {}, limit: {}", userId, limit);
+
+        // Get user's followed users
+        List<Long> followedUserIds = userFollowService.getFollowedUserIds(userId);
+
+        if (followedUserIds.isEmpty()) {
+            log.info("User {} has no followed users, returning empty social recommendations", userId);
+            return List.of();
+        }
+
+        log.debug("User follows {} users: {}", followedUserIds.size(), followedUserIds);
+
+        // Get all active events
+        List<Event> activeEvents = eventRepository.findByEventStatus(EventStatus.ACTIVE);
+
+        // Calculate social scores for each event
+        Map<Long, Double> eventScores = new HashMap<>();
+        Map<Long, Event> eventMap = new HashMap<>();
+
+        for (Event event : activeEvents) {
+            eventMap.put(event.getId(), event);
+            double score = 0.0;
+
+            // 1. Events created by followed users (weight: 0.4)
+            if (followedUserIds.contains(event.getCreatedBy().getId())) {
+                score += 0.4;
+                log.debug("Event {} created by followed user, score +0.4", event.getId());
+            }
+
+            // 2. Events liked by followed users (weight: 0.35)
+            List<EventInterest> eventInterests = eventInterestRepository.findByEvent_Id(event.getId());
+            long followedUsersLiked = eventInterests.stream()
+                    .filter(ei -> followedUserIds.contains(ei.getUser().getId()))
+                    .count();
+            if (followedUsersLiked > 0) {
+                // Diminishing returns: max boost at 5+ followed users
+                double likeBoost = 0.35 * Math.min(1.0, followedUsersLiked / 5.0);
+                score += likeBoost;
+                log.debug("Event {} liked by {} followed users, score +{}",
+                         event.getId(), followedUsersLiked, likeBoost);
+            }
+
+            // 3. Events attended by followed users (weight: 0.25)
+            long followedUsersAttending = eventEnrollmentRepository.findByEvent_Id(event.getId())
+                    .stream()
+                    .filter(enrollment -> followedUserIds.contains(enrollment.getUser().getId()))
+                    .count();
+            if (followedUsersAttending > 0) {
+                // Diminishing returns: max boost at 3+ followed users attending
+                double attendBoost = 0.25 * Math.min(1.0, followedUsersAttending / 3.0);
+                score += attendBoost;
+                log.debug("Event {} attended by {} followed users, score +{}",
+                         event.getId(), followedUsersAttending, attendBoost);
+            }
+
+            if (score > 0) {
+                eventScores.put(event.getId(), score);
+            }
+        }
+
+        // Sort by score and return top N
+        int resultLimit = limit != null && limit > 0 ? limit : 10;
+        List<EventResponseDto> recommendations = eventScores.entrySet().stream()
+                .sorted((e1, e2) -> Double.compare(e2.getValue(), e1.getValue()))
+                .limit(resultLimit)
+                .map(entry -> mapToResponseWithScore(eventMap.get(entry.getKey()), entry.getValue()))
+                .collect(Collectors.toList());
+
+        log.info("Returning {} social recommendations for user {}", recommendations.size(), userId);
+        return recommendations;
+    }
+
+    /**
+     * Get purely interest-based recommendations
+     * Recommends events based solely on user's interests (tags)
+     * Uses Jaccard similarity for content matching
+     */
+    public List<EventResponseDto> getInterestBasedRecommendations(Long userId, Integer limit) {
+        log.debug("Getting interest-based recommendations for user: {}, limit: {}", userId, limit);
+
+        // Get user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        // Get user interests as tag keys
+        List<UserInterest> userInterests = userInterestRepository.findByUser(user);
+        Set<String> userTagKeys = userInterests.stream()
+                .map(ui -> ui.getInterestTag().getTagKey())
+                .collect(Collectors.toSet());
+
+        log.debug("User has {} interests: {}", userTagKeys.size(), userTagKeys);
+
+        if (userTagKeys.isEmpty()) {
+            log.info("User {} has no interests, returning empty interest-based recommendations", userId);
+            return List.of();
+        }
+
+        // Get all active events
+        List<Event> activeEvents = eventRepository.findByEventStatus(EventStatus.ACTIVE);
+
+        // Calculate content scores for each event
+        List<EventWithScore> scoredEvents = activeEvents.stream()
+                .map(event -> {
+                    // Get event tags
+                    List<EventTagMap> eventTagMaps = eventTagMapRepository.findByEvent(event);
+                    Set<String> eventTagKeys = eventTagMaps.stream()
+                            .map(etm -> etm.getEventTag().getTagKey())
+                            .collect(Collectors.toSet());
+
+                    // Calculate Jaccard similarity
+                    double contentScore = calculateJaccardSimilarity(userTagKeys, eventTagKeys);
+
+                    return new EventWithScore(event, contentScore);
+                })
+                .filter(ews -> ews.score > 0.0)  // Only include events with matching interests
+                .sorted((e1, e2) -> Double.compare(e2.score, e1.score))
+                .limit(limit != null && limit > 0 ? limit : 10)
+                .toList();
+
+        log.info("Returning {} interest-based recommendations for user {}", scoredEvents.size(), userId);
+
+        return scoredEvents.stream()
+                .map(ews -> mapToResponseWithScore(ews.event, ews.score))
+                .collect(Collectors.toList());
     }
 
     // Inner class to hold event with its calculated score

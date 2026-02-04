@@ -8,6 +8,7 @@ import com.rabin.backend.dto.request.RegisterDto;
 import com.rabin.backend.dto.response.UserAuthResponseDto;
 import com.rabin.backend.enums.InterestCategory;
 import com.rabin.backend.enums.RoleName;
+import com.rabin.backend.enums.UserStatus;
 import com.rabin.backend.exception.InvalidCredentialsException;
 import com.rabin.backend.exception.UserNotFoundException;
 import com.rabin.backend.model.EventTag;
@@ -134,6 +135,9 @@ public class AuthService {
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
             log.warn("Login failed - invalid password for user: {}", user.getId());
             throw new InvalidCredentialsException("Invalid email or password");
+        }
+        if(user.getUserStatus()== UserStatus.SUSPENDED){
+            throw new InvalidCredentialsException("User has been suspended");
         }
 
         log.info("User logged in successfully: {}", user.getId());
