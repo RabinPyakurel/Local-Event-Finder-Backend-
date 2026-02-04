@@ -140,6 +140,14 @@ public class AuthService {
             throw new InvalidCredentialsException("User has been suspended");
         }
 
+        // Block admin users from using regular login endpoint
+        boolean isAdmin = user.getRoles().stream()
+                .anyMatch(role -> role.getName() == RoleName.ADMIN);
+        if (isAdmin) {
+            log.warn("Admin login attempt blocked on regular endpoint: {}", dto.getEmail());
+            throw new InvalidCredentialsException("Admin accounts must use the admin login endpoint");
+        }
+
         log.info("User logged in successfully: {}", user.getId());
         String token = jwtService.generateToken(user);
         return buildUserAuthResponse(user, token, "Login successful");
