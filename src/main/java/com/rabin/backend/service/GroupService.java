@@ -12,12 +12,14 @@ import com.rabin.backend.model.GroupEventMap;
 import com.rabin.backend.model.GroupMembership;
 import com.rabin.backend.model.GroupTagMap;
 import com.rabin.backend.model.User;
+import com.rabin.backend.enums.NotificationType;
 import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagRepository;
 import com.rabin.backend.repository.GroupEventMapRepository;
 import com.rabin.backend.repository.GroupMembershipRepository;
 import com.rabin.backend.repository.GroupRepository;
 import com.rabin.backend.repository.GroupTagMapRepository;
+import com.rabin.backend.repository.UserFollowRepository;
 import com.rabin.backend.repository.UserRepository;
 import com.rabin.backend.util.FileUtil;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,8 @@ public class GroupService {
     private final UserRepository userRepository;
     private final EventTagRepository eventTagRepository;
     private final EventRepository eventRepository;
+    private final UserFollowRepository userFollowRepository;
+    private final NotificationService notificationService;
 
     /**
      * Create a new group
@@ -317,6 +321,121 @@ public class GroupService {
                 .filter(em -> !em.getIsPrivate() || isMember) // Filter private events for non-members
                 .map(em -> mapToEventResponseDto(em.getEvent()))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Invite all followers to a group (sends pending invitation)
+     * Any active group member can invite all their followers at once
+     */
+    @Transactional
+    public int inviteAllFollowersToGroup(Long groupId, Long inviterId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Group not found"));
+
+        User inviter = userRepository.findById(inviterId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Verify inviter is an active member of the group
+        if (!membershipRepository.existsByUserAndGroupAndStatus(inviter, group, MembershipStatus.ACTIVE)) {
+            throw new IllegalStateException("You must be an active member of the group to invite others");
+        }
+
+        // Get all followers of the inviter
+        List<User> followers = userFollowRepository.findByFollowing_Id(inviterId).stream()
+                .map(uf -> uf.getFollower())
+                .collect(Collectors.toList());
+
+        if (followers.isEmpty()) {
+            throw new IllegalStateException("You have no followers to invite");
+        }
+
+        int invitedCount = 0;
+
+        for (User follower : followers) {
+            // Skip if already active member
+            if (membershipRepository.existsByUserAndGroupAndStatus(follower, group, MembershipStatus.ACTIVE)) {
+                continue;
+            }
+
+            // Skip if banned
+            if (membershipRepository.existsByUserAndGroupAndStatus(follower, group, MembershipStatus.BANNED)) {
+                continue;
+            }
+
+            // Skip if already has a pending invite
+            if (membershipRepository.existsByUserAndGroupAndStatus(follower, group, MembershipStatus.PENDING)) {
+                continue;
+            }
+
+            GroupMembership membership = new GroupMembership();
+            membership.setUser(follower);
+            membership.setGroup(group);
+            membership.setStatus(MembershipStatus.PENDING);
+            membership.setIsAdmin(false);
+
+            membershipRepository.save(membership);
+            invitedCount++;
+
+            // Notify each invited follower
+            notificationService.sendNotification(
+                    follower.getId(),
+                    NotificationType.GROUP_INVITE,
+                    "Group Invitation",
+                    inviter.getFullName() + " invited you to join the group '" + group.getName() + "'",
+                    groupId,
+                    "GROUP"
+            );
+        }
+
+        log.info("User {} invited {} followers to group {}", inviterId, invitedCount, groupId);
+        return invitedCount;
+    }
+
+    /**
+     * Accept a group invitation
+     */
+    @Transactional
+    public GroupMembershipResponseDto acceptGroupInvite(Long groupId, Long userId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Group not found"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        GroupMembership membership = membershipRepository.findByUserAndGroup(user, group)
+                .orElseThrow(() -> new RuntimeException("No invitation found for this group"));
+
+        if (membership.getStatus() != MembershipStatus.PENDING) {
+            throw new IllegalStateException("No pending invitation for this group");
+        }
+
+        membership.setStatus(MembershipStatus.ACTIVE);
+        membership = membershipRepository.save(membership);
+
+        log.info("User {} accepted invite to group {}", userId, groupId);
+        return mapToMembershipResponseDto(membership);
+    }
+
+    /**
+     * Decline a group invitation
+     */
+    @Transactional
+    public void declineGroupInvite(Long groupId, Long userId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Group not found"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        GroupMembership membership = membershipRepository.findByUserAndGroup(user, group)
+                .orElseThrow(() -> new RuntimeException("No invitation found for this group"));
+
+        if (membership.getStatus() != MembershipStatus.PENDING) {
+            throw new IllegalStateException("No pending invitation for this group");
+        }
+
+        membershipRepository.delete(membership);
+        log.info("User {} declined invite to group {}", userId, groupId);
     }
 
     /**

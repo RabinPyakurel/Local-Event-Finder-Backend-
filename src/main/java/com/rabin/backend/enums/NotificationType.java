@@ -7,5 +7,6 @@ public enum NotificationType {
     EVENT_FEEDBACK,
     EVENT_UPDATED,
     EVENT_CANCELLED,
-    PAYMENT_COMPLETED
+    PAYMENT_COMPLETED,
+    GROUP_INVITE
 }

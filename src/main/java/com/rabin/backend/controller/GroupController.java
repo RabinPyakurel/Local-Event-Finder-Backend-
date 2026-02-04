@@ -1,5 +1,6 @@
 package com.rabin.backend.controller;
 
+import com.rabin.backend.dto.GenericApiResponse;
 import com.rabin.backend.dto.request.GroupRequestDto;
 import com.rabin.backend.dto.response.EventResponseDto;
 import com.rabin.backend.dto.response.GroupMembershipResponseDto;
@@ -240,6 +241,63 @@ public class GroupController {
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
+    }
+
+    @Operation(summary = "Invite all followers to group", description = "Send group invitation to all your followers. They will receive a notification and can accept or decline. Already active, banned, or pending members are skipped.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Invitations sent successfully"),
+            @ApiResponse(responseCode = "400", description = "No followers to invite or not a group member"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @PostMapping("/{groupId}/invite-followers")
+    @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
+    public ResponseEntity<GenericApiResponse<Map<String, Integer>>> inviteAllFollowersToGroup(
+            @Parameter(description = "Group ID") @PathVariable Long groupId
+    ) {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        int invitedCount = groupService.inviteAllFollowersToGroup(groupId, currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, invitedCount + " invitation(s) sent", Map.of("invitedCount", invitedCount))
+        );
+    }
+
+    @Operation(summary = "Accept group invitation", description = "Accept a pending group invitation. Changes membership status from PENDING to ACTIVE.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Invitation accepted successfully"),
+            @ApiResponse(responseCode = "400", description = "No pending invitation"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @PostMapping("/{groupId}/accept-invite")
+    @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
+    public ResponseEntity<GenericApiResponse<GroupMembershipResponseDto>> acceptGroupInvite(
+            @Parameter(description = "Group ID") @PathVariable Long groupId
+    ) {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        GroupMembershipResponseDto membership = groupService.acceptGroupInvite(groupId, currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Invitation accepted successfully", membership)
+        );
+    }
+
+    @Operation(summary = "Decline group invitation", description = "Decline a pending group invitation. Removes the pending membership.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Invitation declined"),
+            @ApiResponse(responseCode = "400", description = "No pending invitation"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @DeleteMapping("/{groupId}/decline-invite")
+    @PreAuthorize("hasAnyRole('USER', 'ORGANIZER', 'ADMIN')")
+    public ResponseEntity<GenericApiResponse<Void>> declineGroupInvite(
+            @Parameter(description = "Group ID") @PathVariable Long groupId
+    ) {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        groupService.declineGroupInvite(groupId, currentUserId);
+        return ResponseEntity.ok(
+                GenericApiResponse.ok(200, "Invitation declined", null)
+        );
     }
 
     @Operation(summary = "Get group events", description = "Get all events in a group")
