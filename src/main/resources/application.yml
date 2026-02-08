@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: optional:file:.env[.properties]
   web:
     error:
       include-message: always
@@ -19,9 +21,9 @@ spring:
 
   # Database Configuration
   datasource:
-    url: ${DB_URL:jdbc:postgresql://aws-1-ap-south-1.pooler.supabase.com:6543/postgres?ssl=true&sslmode=require&preferQueryMode=simple}
-    username: ${DB_USERNAME:postgres.rbyiitbryebpptdgttwh}
-    password: ${DB_PASSWORD:daYIjIgJ4NNAy4S1}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       connection-timeout: 30000
@@ -57,8 +59,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:annoa16307@gmail.com}
-    password: ${MAIL_PASSWORD:pekzktlmsgzsibtp}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -74,22 +76,22 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:HGl4x4g8lsDeSEfpuQ9MSCHj+L7N1QHu/ElpT5Ed/Uk=}
+    secret: ${JWT_SECRET}
     expiration: 86400000
   admin:
-    secret-key: ${ADMIN_SECRET_KEY:SuperSecretAdminKey@2024!}
+    secret-key: ${ADMIN_SECRET_KEY}
   cors:
     allowed-origins: http://localhost:3000,http://localhost:5173
   payment:
     khalti:
-      secret-key: ${KHALTI_SECRET_KEY:live_secret_key_68791341fdd94846a146f0457ff7b455}
+      secret-key: ${KHALTI_SECRET_KEY}
       api-url: https://dev.khalti.com/api/v2/epayment
     esewa:
-      secret-key: ${ESEWA_SECRET_KEY:8gBm/:&EnhH.1/q}
-      product-code: ${ESEWA_PRODUCT_CODE:EPAYTEST}
+      secret-key: ${ESEWA_SECRET_KEY}
+      product-code: ${ESEWA_PRODUCT_CODE}
       form-url: https://rc-epay.esewa.com.np/api/epay/main/v2/form
-  base-url: ${APP_BASE_URL:http://localhost:8080}
-  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+  base-url: ${APP_BASE_URL}
+  frontend-url: ${APP_FRONTEND_URL}
 
 # Server configuration
 server:
