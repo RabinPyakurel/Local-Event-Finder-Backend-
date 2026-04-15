@@ -2,9 +2,14 @@ package com.rabin.backend.repository;
 
 import com.rabin.backend.enums.EventStatus;
 import com.rabin.backend.model.Event;
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,4 +33,9 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     // Get organizer's events filtered by status (for public profile)
     List<Event> findByCreatedBy_IdAndEventStatus(Long organizerId, EventStatus status);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE Event e set e.eventStatus = 'COMPLETED' WHERE e.startDate < :now AND e.eventStatus='ACTIVE'")
+    void markEventAsCompleted(@Param("now")LocalDateTime now);
 }

@@ -3,9 +3,11 @@ package com.rabin.backend.config;
 import com.rabin.backend.enums.InterestCategory;
 import com.rabin.backend.enums.PermissionName;
 import com.rabin.backend.enums.RoleName;
+import com.rabin.backend.model.Event;
 import com.rabin.backend.model.EventTag;
 import com.rabin.backend.model.Permission;
 import com.rabin.backend.model.Role;
+import com.rabin.backend.repository.EventRepository;
 import com.rabin.backend.repository.EventTagRepository;
 import com.rabin.backend.repository.PermissionRepository;
 import com.rabin.backend.repository.RoleRepository;
@@ -13,13 +15,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.Scheduled;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
 @Slf4j
 @Configuration
 public class DataInitializer {
+    private final EventRepository eventRepository;
+
+    public DataInitializer(EventRepository eventRepository){
+        this.eventRepository=eventRepository;
+    }
 
     @Bean
     CommandLineRunner initDatabase(RoleRepository roleRepository,
@@ -36,7 +45,6 @@ public class DataInitializer {
 
             // Initialize Event Tags from InterestCategory
             initializeEventTags(eventTagRepository);
-
             log.info("Data initialization completed successfully!");
         };
     }
@@ -134,5 +142,10 @@ public class DataInitializer {
 
         log.info("Event tags initialized: {} created, {} total",
                 createdCount, eventTagRepository.count());
+    }
+
+    @Scheduled(fixedRate = 60000)
+    private void markCompletedEvents(){
+        eventRepository.markEventAsCompleted(LocalDateTime.now());
     }
 }
