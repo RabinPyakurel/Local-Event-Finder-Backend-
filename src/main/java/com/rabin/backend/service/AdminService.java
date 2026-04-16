@@ -377,6 +377,17 @@ public class AdminService {
         dto.setEventImageUrl(event.getEventImageUrl());
         dto.setStartDate(event.getStartDate());
         dto.setEndDate(event.getEndDate());
+        dto.setIsPaid(event.getIsPaid());
+        dto.setPrice(event.getPrice());
+        // Compute remaining available seats: null = unlimited, otherwise clamp to 0
+        Integer totalSeats = event.getAvailableSeats();
+        int booked = event.getBookedSeats() != null ? event.getBookedSeats() : 0;
+        if (totalSeats != null) {
+            dto.setAvailableSeats(Math.max(0, totalSeats - booked));
+        } else {
+            dto.setAvailableSeats(null); // null = unlimited
+        }
+        dto.setBookedSeats(booked);
         dto.setLatitude(event.getLatitude());
         dto.setLongitude(event.getLongitude());
         dto.setOrganizerName(event.getCreatedBy().getFullName());

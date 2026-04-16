@@ -642,7 +642,7 @@ public class EventService {
      * Send email notification about refund due to event type change
      */
     @Async
-    private void sendEventTypeChangeRefundEmail(EventEnrollment enrollment, Event event, Double refundAmount) {
+    public void sendEventTypeChangeRefundEmail(EventEnrollment enrollment, Event event, Double refundAmount) {
         try {
             String subject = "Refund Processed - " + event.getTitle() + " is now FREE!";
             String body = String.format(
