@@ -39,7 +39,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -105,14 +105,11 @@ server:
 # Logging configuration
 logging:
   level:
-    org.springframework.transaction: DEBUG
-    org.springframework.jdbc: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-    org.hibernate.engine.transaction.internal.TransactionImpl: DEBUG
-    com.zaxxer.hikari: DEBUG
-    com.rabin.backend: DEBUG
-    # Enable Tomcat multipart debugging
-    org.apache.tomcat.util.http.fileupload: DEBUG
-    org.apache.catalina.connector: DEBUG
-    org.apache.catalina.core: DEBUG
+    root: WARN
+    org.springframework: WARN
+    org.hibernate: WARN
+    com.zaxxer.hikari: WARN
+    org.apache: WARN
+    # Keep payment/eSewa logs visible
+    com.rabin.backend.service.payment: DEBUG
+    com.rabin.backend.controller.PaymentController: DEBUG

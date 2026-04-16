@@ -21,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -181,15 +182,23 @@ public class PaymentController {
             Map<String, String> esewaParams;
 
             if (dataParam != null && !dataParam.isEmpty()) {
+                // FIX: '+' characters in Base64 get decoded as spaces by URL decoder
+                String cleanedData = dataParam.replace(" ", "+");
+                log.info("Raw data param length: {}, cleaned: {}", dataParam.length(), cleanedData.length());
+
                 // Decode Base64 and parse JSON
-                String decodedJson = new String(Base64.getDecoder().decode(dataParam), StandardCharsets.UTF_8);
+                String decodedJson = new String(Base64.getDecoder().decode(cleanedData), StandardCharsets.UTF_8);
                 log.info("Decoded eSewa data: {}", decodedJson);
 
+                // FIX: Use readTree + asText() to preserve exact string values from JSON
+                // This avoids Double/Integer conversion issues that break HMAC signature matching
                 ObjectMapper objectMapper = new ObjectMapper();
-                @SuppressWarnings("unchecked")
-                Map<String, Object> parsed = objectMapper.readValue(decodedJson, Map.class);
+                JsonNode rootNode = objectMapper.readTree(decodedJson);
                 esewaParams = new HashMap<>();
-                parsed.forEach((key, value) -> esewaParams.put(key, String.valueOf(value)));
+                rootNode.fields().forEachRemaining(entry ->
+                        esewaParams.put(entry.getKey(), entry.getValue().asText()));
+
+                log.info("Parsed eSewa params: {}", esewaParams);
             } else {
                 // Fallback: read individual query params directly
                 esewaParams = new HashMap<>(allParams);
@@ -210,7 +219,7 @@ public class PaymentController {
             Payment payment = paymentService.verifyEsewaPayment(esewaParams);
 
             String baseCallbackUrl = payment.getCallbackUrl() != null ?
-                    payment.getCallbackUrl() : frontendUrl + "/payment/callback";
+                    payment.getCallbackUrl() : frontendUrl + "/payment-callback";
 
             Map<String, String> redirectParams = new HashMap<>();
             redirectParams.put("status", safeValue(String.valueOf(payment.getPaymentStatus())));
@@ -245,7 +254,7 @@ public class PaymentController {
             errorParams.put("error", safeValue(e.getMessage()));
 
             String errorRedirectUrl = RedirectUtil.buildSafeRedirectUrl(
-                    frontendUrl + "/payment/callback",
+                    frontendUrl + "/payment-callback",
                     errorParams
             );
 

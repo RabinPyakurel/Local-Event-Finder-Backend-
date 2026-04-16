@@ -14,6 +14,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByUserAndPaymentStatus(User user, PaymentStatus status);
     Optional<Payment> findByTransactionId(String transactionId);
     Optional<Payment> findByEnrollment(EventEnrollment enrollment);
+    Optional<Payment> findFirstByUser_IdAndEvent_IdAndPaymentStatus(Long userId, Long eventId, PaymentStatus status);
 
     // Count methods for admin dashboard
     long countByPaymentStatus(PaymentStatus status);

@@ -4,6 +4,7 @@ import com.rabin.backend.dto.response.EsewaPaymentFormDto;
 import com.rabin.backend.model.Event;
 import com.rabin.backend.model.Payment;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +17,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EsewaPaymentService {
 
     @Value("${app.payment.esewa.secret-key}")
@@ -101,7 +103,11 @@ public class EsewaPaymentService {
         String signedFieldNames = esewaResponse.get("signed_field_names");
         String signature = esewaResponse.get("signature");
 
+        log.info("eSewa verify - signed_field_names: {}", signedFieldNames);
+        log.info("eSewa verify - received signature: {}", signature);
+
         if (signedFieldNames == null || signature == null) {
+            log.error("eSewa verify FAILED: signed_field_names or signature is null");
             return false;
         }
 
@@ -110,10 +116,18 @@ public class EsewaPaymentService {
         String[] fields = signedFieldNames.split(",");
         for (int i = 0; i < fields.length; i++) {
             if (i > 0) message.append(",");
-            message.append(fields[i]).append("=").append(esewaResponse.getOrDefault(fields[i], ""));
+            String fieldValue = esewaResponse.getOrDefault(fields[i], "");
+            message.append(fields[i]).append("=").append(fieldValue);
+            log.debug("eSewa verify - field[{}]: {}={}", i, fields[i], fieldValue);
         }
 
-        String expectedSignature = generateHmacSHA256Signature(message.toString());
+        String messageStr = message.toString();
+        String expectedSignature = generateHmacSHA256Signature(messageStr);
+
+        log.info("eSewa verify - message for HMAC: {}", messageStr);
+        log.info("eSewa verify - expected signature: {}", expectedSignature);
+        log.info("eSewa verify - signatures match: {}", expectedSignature.equals(signature));
+
         return expectedSignature.equals(signature);
     }
 }

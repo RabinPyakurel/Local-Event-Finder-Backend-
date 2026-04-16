@@ -64,14 +64,26 @@ public class PaymentService {
             throw new RuntimeException("No seats available for this event");
         }
 
-        // Create payment record
-        Payment payment = new Payment();
-        payment.setUser(user);
-        payment.setEvent(event);
-        payment.setAmount(event.getPrice());
-        payment.setPaymentMethod(dto.getPaymentMethod());
-        payment.setPaymentStatus(PaymentStatus.PENDING);
-        payment.setCallbackUrl(dto.getReturnUrl());  // Store frontend callback URL
+        // Reuse existing PENDING payment for this user+event, or create a new one
+        Payment payment = paymentRepository.findFirstByUser_IdAndEvent_IdAndPaymentStatus(
+                userId, dto.getEventId(), PaymentStatus.PENDING
+        ).orElse(null);
+
+        if (payment != null) {
+            log.info("Reusing existing PENDING payment {} for user {} event {}",
+                    payment.getId(), userId, dto.getEventId());
+            // Update payment method and callback URL in case they changed
+            payment.setPaymentMethod(dto.getPaymentMethod());
+            payment.setCallbackUrl(dto.getReturnUrl());
+        } else {
+            payment = new Payment();
+            payment.setUser(user);
+            payment.setEvent(event);
+            payment.setAmount(event.getPrice());
+            payment.setPaymentMethod(dto.getPaymentMethod());
+            payment.setPaymentStatus(PaymentStatus.PENDING);
+            payment.setCallbackUrl(dto.getReturnUrl());
+        }
 
         // Save payment
         payment = paymentRepository.save(payment);
@@ -141,21 +153,29 @@ public class PaymentService {
         String transactionUuid = esewaParams.get("transaction_uuid");
         String esewaStatus = esewaParams.get("status");
 
-        log.info("Verifying eSewa payment: transactionUuid={}, status={}", transactionUuid, esewaStatus);
+        log.info("Verifying eSewa payment: transactionUuid={}, status={}, allParams={}",
+                transactionUuid, esewaStatus, esewaParams.keySet());
 
         // Find payment by transaction ID
         Payment payment = paymentRepository.findByTransactionId(transactionUuid)
-                .orElseThrow(() -> new RuntimeException("Payment not found"));
+                .orElseThrow(() -> {
+                    log.error("Payment not found for transactionId: {}", transactionUuid);
+                    return new RuntimeException("Payment not found for transaction: " + transactionUuid);
+                });
+
+        log.info("Found payment: id={}, currentStatus={}, eventId={}",
+                payment.getId(), payment.getPaymentStatus(), payment.getEvent().getId());
 
         // Check eSewa status first
         if (!"COMPLETE".equals(esewaStatus)) {
-            log.warn("eSewa payment not complete. Status: {}", esewaStatus);
+            log.warn("eSewa payment not complete. Status: '{}'", esewaStatus);
             payment.setPaymentStatus(PaymentStatus.FAILED);
             return paymentRepository.save(payment);
         }
 
         // Verify signature using the full eSewa response
         boolean verified = esewaPaymentService.verifyPayment(esewaParams);
+        log.info("eSewa signature verification result: {}", verified);
 
         if (verified) {
             payment.setPaymentStatus(PaymentStatus.COMPLETED);
@@ -178,6 +198,7 @@ public class PaymentService {
                     "EVENT"
             );
         } else {
+            log.error("eSewa signature verification FAILED for payment: {}", payment.getId());
             payment.setPaymentStatus(PaymentStatus.FAILED);
         }
 
@@ -194,8 +215,20 @@ public class PaymentService {
         // Check if already enrolled (return first existing ticket)
         if (enrollmentRepository.existsByUser_IdAndEvent_Id(user.getId(), event.getId())) {
             log.warn("User {} already enrolled in event {}", user.getId(), event.getId());
-            return enrollmentRepository.findFirstByUser_IdAndEvent_Id(user.getId(), event.getId())
+            EventEnrollment existingEnrollment = enrollmentRepository.findFirstByUser_IdAndEvent_Id(user.getId(), event.getId())
                     .orElseThrow(() -> new RuntimeException("Enrollment not found"));
+
+            // Clear enrollment reference from any old payment to avoid unique constraint violation
+            paymentRepository.findByEnrollment(existingEnrollment).ifPresent(oldPayment -> {
+                if (!oldPayment.getId().equals(payment.getId())) {
+                    log.info("Clearing enrollment reference from old payment {} to reassign to payment {}",
+                            oldPayment.getId(), payment.getId());
+                    oldPayment.setEnrollment(null);
+                    paymentRepository.save(oldPayment);
+                }
+            });
+
+            return existingEnrollment;
         }
 
         // Create enrollment
@@ -207,9 +240,13 @@ public class PaymentService {
 
         enrollment = enrollmentRepository.save(enrollment);
 
-        // Update booked seats
-        event.setBookedSeats(event.getBookedSeats() + 1);
+        // Update booked seats (null-safe)
+        int currentBooked = event.getBookedSeats() != null ? event.getBookedSeats() : 0;
+        event.setBookedSeats(currentBooked + 1);
         eventRepository.save(event);
+
+        log.info("Auto-enrolled user {} in event {}. BookedSeats: {} -> {}",
+                user.getId(), event.getId(), currentBooked, currentBooked + 1);
 
         return enrollment;
     }
