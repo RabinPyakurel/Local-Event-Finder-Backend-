@@ -3,6 +3,7 @@
 A production-grade RESTful backend for a local event discovery and management platform built with **Spring Boot**. The system supports event creation, ticketing with QR code check-in, dual payment gateway integration, community groups, and a full admin moderation panel — all secured with **JWT authentication** and a granular **Role-Based Access Control (RBAC)** system.
 
 ---
+# Live Demo : https://local-event-finder-deployed.vercel.app
 
 ## Tech Stack
 
